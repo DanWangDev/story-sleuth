@@ -1,0 +1,42 @@
+node_modules/
+dist/
+build/
+.env
+.env.local
+.env.production
+.env.*.local
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build artifacts
+*.tsbuildinfo
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Data / local state
+packages/backend/data/
+*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# gstack
+.gstack/
+
+# Temp
+tmp/
+.tmp/
