@@ -1,0 +1,21 @@
+{
+  "name": "story-sleuth",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-powered 11+ reading comprehension trainer — third app in the Lab F 11+ suite",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:backend": "npm run dev -w packages/backend",
+    "dev:frontend": "npm run dev -w packages/frontend",
+    "build": "npm run build -w packages/shared && npm run build -w packages/backend && npm run build -w packages/frontend",
+    "test": "npm run test -w packages/shared && npm run test -w packages/backend && npm run test -w packages/frontend",
+    "test:coverage": "npm run test:coverage -w packages/backend && npm run test:coverage -w packages/frontend",
+    "lint": "npm run lint -w packages/frontend",
+    "typecheck": "npm run typecheck -w packages/shared && npx tsc --noEmit -p packages/backend/tsconfig.json && npx tsc --noEmit -p packages/frontend/tsconfig.app.json"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

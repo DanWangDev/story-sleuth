@@ -66,6 +66,45 @@ story-sleuth/
 - **Phase 2:** Test mode + adaptive engine + parent dashboard integration.
 - **Phase 3:** Cross-app intelligence (shared weakness taxonomy across vocab-master, writing-buddy, story-sleuth via 11plus-hub).
 
+## Workflow Rules
+
+**Never commit or push directly to `main`.** Every change — features, bug fixes, docs updates, README tweaks, everything — goes via a feature branch and a pull request. No exceptions.
+
+Branch naming:
+- `feat/<short-description>` — new features
+- `fix/<short-description>` — bug fixes
+- `chore/<short-description>` — infra, CI, configs, dependency bumps
+- `docs/<short-description>` — documentation-only changes
+- `refactor/<short-description>` — code reshaping without behavior change
+- `test/<short-description>` — test-only additions or fixes
+
+**PR + CI rules:**
+- Open a PR after pushing the branch (`gh pr create`).
+- After opening the PR, check CI status: `gh pr checks` or `gh run watch`.
+- **CI must be fully green before the PR is ready.** No failures AND no warnings. Read the run logs and fix anything you see — warnings included. Flaky tests are bugs; fix them, don't ignore them.
+- Only after CI is green should the PR be considered ready for review / merge.
+
+## Monorepo Structure
+
+Story-sleuth separates frontend and backend the same way vocab-master and writing-buddy do:
+
+```
+packages/
+├── shared/      # Zod schemas, shared TypeScript types (Question, Passage, Session, StudentAttempt)
+├── backend/     # Express API, content pipeline, admin endpoints (own Dockerfile)
+└── frontend/    # React SPA, student + admin UI (own Dockerfile + nginx)
+```
+
+Each package has its own `package.json`, `tsconfig.json`, and `Dockerfile`. The root `package.json` uses npm workspaces. The `docker-compose.yml` builds `backend` and `frontend` as separate services.
+
+## Container Publishing
+
+CI publishes Docker images to GitHub Container Registry on every push to `main`:
+- `ghcr.io/danwangdev/story-sleuth-backend`
+- `ghcr.io/danwangdev/story-sleuth-frontend`
+
+Images are tagged with the commit SHA (always) and `latest` (on main only). Authentication uses `GITHUB_TOKEN` (no extra secrets required). Pulls require `packages: read` permission on the registry.
+
 ## Skill routing
 
 When the user's request matches an available skill, ALWAYS invoke it using the Skill
