@@ -1,0 +1,11 @@
+# Shell scripts run on Linux hosts — keep LF regardless of the dev's
+# git autocrlf setting, otherwise they fail with "bad interpreter" on
+# deploy.
+*.sh text eol=lf
+
+# Docker / compose / yaml files are parsed by Linux-based tooling
+# (buildkit, compose engine). Keep LF to avoid subtle parser quirks.
+Dockerfile text eol=lf
+*.Dockerfile text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
