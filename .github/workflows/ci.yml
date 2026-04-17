@@ -57,6 +57,22 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: story_sleuth
+          POSTGRES_PASSWORD: story_sleuth
+          POSTGRES_DB: story_sleuth
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U story_sleuth -d story_sleuth"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      DATABASE_URL: postgres://story_sleuth:story_sleuth@localhost:5432/story_sleuth
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
