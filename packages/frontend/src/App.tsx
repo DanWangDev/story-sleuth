@@ -1,5 +1,3 @@
-import { PACKAGE_NAME } from "@story-sleuth/shared";
-
 export function App(): React.ReactElement {
   return (
     <main className="min-h-screen bg-page text-ink font-sans">
@@ -10,9 +8,6 @@ export function App(): React.ReactElement {
         <p className="font-serif text-xl text-ink-muted max-w-[55ch] leading-snug">
           Read a passage. Answer questions. When you get one wrong, we&apos;ll
           look at it together.
-        </p>
-        <p className="mt-8 font-mono text-xs text-ink-quiet">
-          scaffold · {PACKAGE_NAME}
         </p>
       </div>
     </main>
