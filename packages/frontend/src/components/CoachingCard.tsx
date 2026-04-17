@@ -1,19 +1,29 @@
+import { useState } from "react";
 import type { Question, StudentAttempt } from "@story-sleuth/shared";
+import { requestWalkthrough } from "../api/sessions.js";
+import { ApiError } from "../api/client.js";
 
 interface CoachingCardProps {
+  sessionId: string;
   question: Question;
   attempt: StudentAttempt | undefined;
   index: number;
 }
 
 /**
- * Post-session review card. Shows the student what they picked,
- * what was correct, and the pre-generated per-option explanations
- * so they can learn from wrong answers. Uses warm amber (NOT red)
- * for the "let's look at this together" state — design decision
- * #3 in DESIGN.md's risk list.
+ * Post-session review card. Shows the student what they picked, what
+ * was correct, and the pre-generated per-option explanations so they
+ * can learn from wrong answers. Uses warm amber (NOT red) for the
+ * "let's look at this together" state — design decision #3 in
+ * DESIGN.md's risk list.
+ *
+ * For wrong answers, the card offers a "Show me a walk-through"
+ * button that hits /api/coach to get a live LLM explanation. Button
+ * debounces (disabled while loading); 429 surfaces a friendly "try
+ * again in a moment" message.
  */
 export function CoachingCard({
+  sessionId,
   question,
   attempt,
   index,
@@ -41,6 +51,36 @@ export function CoachingCard({
       : status === "wrong"
         ? "Let's look at this together"
         : "You didn't answer this one";
+
+  const [walkthroughText, setWalkthroughText] = useState<string | null>(null);
+  const [walkthroughError, setWalkthroughError] = useState<string | null>(null);
+  const [walkthroughLoading, setWalkthroughLoading] = useState(false);
+
+  async function handleWalkthrough(): Promise<void> {
+    if (!attempt || walkthroughLoading) return;
+    setWalkthroughLoading(true);
+    setWalkthroughError(null);
+    try {
+      const r = await requestWalkthrough(sessionId, attempt.id);
+      setWalkthroughText(r.text);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 429) {
+        setWalkthroughError(
+          "Give us a moment — let's try that again in a little bit.",
+        );
+      } else if (err instanceof ApiError && err.status === 503) {
+        setWalkthroughError(
+          "The coach isn't set up yet. Ask an admin to configure the LLM provider.",
+        );
+      } else if (err instanceof ApiError) {
+        setWalkthroughError("Couldn't reach the coach. Try again in a moment.");
+      } else {
+        setWalkthroughError("Something went wrong. Try again in a moment.");
+      }
+    } finally {
+      setWalkthroughLoading(false);
+    }
+  }
 
   return (
     <article
@@ -140,6 +180,44 @@ export function CoachingCard({
         >
           {label}
         </div>
+
+        {status === "wrong" && walkthroughText === null && (
+          <div className="mt-2">
+            <button
+              type="button"
+              onClick={() => void handleWalkthrough()}
+              disabled={walkthroughLoading}
+              className="font-sans font-semibold rounded-md text-[14px] px-4 py-2"
+              style={{
+                minHeight: 40,
+                background: "transparent",
+                color: "var(--color-accent)",
+                border: "1.5px solid var(--color-accent)",
+                cursor: walkthroughLoading ? "wait" : "pointer",
+                opacity: walkthroughLoading ? 0.7 : 1,
+              }}
+            >
+              {walkthroughLoading ? "Thinking..." : "Show me a walk-through →"}
+            </button>
+          </div>
+        )}
+        {walkthroughError && (
+          <p
+            className="mt-2 text-[14px]"
+            style={{ color: "var(--color-warning)" }}
+            role="alert"
+          >
+            {walkthroughError}
+          </p>
+        )}
+        {walkthroughText && (
+          <div
+            className="mt-3 font-serif text-[15px] leading-relaxed whitespace-pre-wrap"
+            style={{ color: "var(--color-ink)" }}
+          >
+            {walkthroughText}
+          </div>
+        )}
       </div>
     </article>
   );

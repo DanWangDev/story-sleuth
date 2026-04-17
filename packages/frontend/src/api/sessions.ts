@@ -99,3 +99,24 @@ export async function endSession(id: string): Promise<SessionResults> {
 export async function listInProgress(): Promise<{ sessions: Session[] }> {
   return apiFetch("/api/sessions/in-progress");
 }
+
+export interface WalkthroughResponse {
+  text: string;
+  provider: "qwen" | "openai" | "anthropic";
+  model: string;
+}
+
+/**
+ * Live LLM walk-through — only callable after the session has ended.
+ * Rate-limited server-side to 10/min per user, so callers should debounce
+ * their button AND surface a friendly message on a 429.
+ */
+export async function requestWalkthrough(
+  session_id: string,
+  attempt_id: string,
+): Promise<WalkthroughResponse> {
+  return apiFetch<WalkthroughResponse>(
+    `/api/coach/sessions/${session_id}/attempts/${attempt_id}/walkthrough`,
+    { method: "POST" },
+  );
+}
