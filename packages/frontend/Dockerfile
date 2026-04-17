@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 FROM node:22-alpine AS builder
 
 WORKDIR /app
@@ -6,8 +7,10 @@ COPY packages/shared/package.json packages/shared/
 COPY packages/frontend/package.json packages/frontend/
 COPY package.json package-lock.json .npmrc ./
 
-ARG NODE_AUTH_TOKEN
-RUN NODE_AUTH_TOKEN=${NODE_AUTH_TOKEN} npm ci --workspace=packages/shared --workspace=packages/frontend --include-workspace-root
+# BuildKit secret mount — token never enters image layers.
+RUN --mount=type=secret,id=node_auth_token \
+    NODE_AUTH_TOKEN=$(cat /run/secrets/node_auth_token 2>/dev/null || echo "") \
+    npm ci --workspace=packages/shared --workspace=packages/frontend --include-workspace-root
 
 COPY packages/shared/ packages/shared/
 COPY packages/frontend/ packages/frontend/

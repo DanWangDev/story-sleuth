@@ -189,8 +189,8 @@ jobs:
           load: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
           tags: ${{ steps.meta-backend.outputs.tags }}
           labels: ${{ steps.meta-backend.outputs.labels }}
-          build-args: |
-            NODE_AUTH_TOKEN=${{ secrets.GH_PACKAGE_TOKEN }}
+          secrets: |
+            node_auth_token=${{ secrets.GH_PACKAGE_TOKEN }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -203,8 +203,9 @@ jobs:
           load: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
           tags: ${{ steps.meta-frontend.outputs.tags }}
           labels: ${{ steps.meta-frontend.outputs.labels }}
+          secrets: |
+            node_auth_token=${{ secrets.GH_PACKAGE_TOKEN }}
           build-args: |
-            NODE_AUTH_TOKEN=${{ secrets.GH_PACKAGE_TOKEN }}
             VITE_API_URL=/api
             VITE_HUB_URL=https://hub.labf.app
           cache-from: type=gha
