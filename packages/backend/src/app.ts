@@ -6,29 +6,23 @@ import { createAuthRoutes } from "@danwangdev/auth-client/server";
 import type { AuthServerConfig } from "@danwangdev/auth-client/server";
 import type postgres from "postgres";
 import { createHealthRouter } from "./routes/health.js";
+import { createSessionsRouter } from "./routes/sessions.js";
 import { buildAuthConfig } from "./auth/auth-config.js";
 import { createRequireAuth } from "./auth/middleware.js";
 import { PostgresUserMappingRepository } from "./repositories/postgres/postgres-user-mapping-repository.js";
+import { PostgresPassageRepository } from "./repositories/postgres/postgres-passage-repository.js";
+import { PostgresQuestionRepository } from "./repositories/postgres/postgres-question-repository.js";
+import { PostgresSessionRepository } from "./repositories/postgres/postgres-session-repository.js";
+import { PostgresStudentAttemptRepository } from "./repositories/postgres/postgres-student-attempt-repository.js";
+import { SessionService } from "./services/session-service.js";
 import type { Env } from "./config/env.js";
 
 export interface AppDeps {
   env: Env;
   sql: postgres.Sql;
-  /**
-   * Test seam: injectable override for the auth config. Tests pass a
-   * minimal config that points at a mock issuer.
-   */
   authConfigOverride?: AuthServerConfig;
 }
 
-/**
- * Build the Express app. Pure function — zero side effects (no listen,
- * no DB connect). Tests instantiate multiple apps from different
- * configs cheaply.
- *
- * CORS is deliberately configured with credentials=true because
- * session cookies cross from the frontend origin to this backend.
- */
 export function createApp(deps: AppDeps): Express {
   const app = express();
   const authConfig = deps.authConfigOverride ?? buildAuthConfig(deps.env);
@@ -46,11 +40,11 @@ export function createApp(deps: AppDeps): Express {
 
   /**
    * Auth-client routes at /api/auth:
-   *   GET  /api/auth/login               — redirect to hub login
-   *   GET  /api/auth/callback            — OIDC callback handler
-   *   POST /api/auth/logout              — destroys local session, redirects to hub end-session
-   *   GET  /api/auth/me                  — current user's claims (JSON)
-   *   POST /api/auth/backchannel-logout  — hub-to-app, destroys session for a sub (mounted when backchannelLogout: true)
+   *   GET  /api/auth/login
+   *   GET  /api/auth/callback
+   *   POST /api/auth/logout
+   *   GET  /api/auth/me
+   *   POST /api/auth/backchannel-logout  (enabled by backchannelLogout: true)
    */
   const authRouter = createAuthRoutes({ ...authConfig, basePath: "/auth" });
   app.use("/api", authRouter);
@@ -58,16 +52,30 @@ export function createApp(deps: AppDeps): Express {
   // Public health check — never gated.
   app.use("/api", createHealthRouter());
 
-  // Future: protected session / admin routes mount behind createRequireAuth.
-  // They get wired when the session API lands in the next PR. The factory
-  // is exported here so each route group can compose its own stack.
+  // Repositories + service wiring.
   const userMappings = new PostgresUserMappingRepository(deps.sql);
+  const passages = new PostgresPassageRepository(deps.sql);
+  const questions = new PostgresQuestionRepository(deps.sql);
+  const sessionRepo = new PostgresSessionRepository(deps.sql);
+  const attempts = new PostgresStudentAttemptRepository(deps.sql);
+  const sessionService = new SessionService(
+    passages,
+    questions,
+    sessionRepo,
+    attempts,
+  );
+
   const requireAuth = createRequireAuth({
     config: authConfig,
     userMappings,
     required_app_slug: deps.env.APP_SLUG,
   });
-  app.locals.requireAuth = requireAuth;
+
+  /**
+   * Student session endpoints — every route requires a valid session and
+   * a subscription that covers APP_SLUG (checked inside requireAuth).
+   */
+  app.use("/api/sessions", requireAuth, createSessionsRouter(sessionService));
 
   return app;
 }
