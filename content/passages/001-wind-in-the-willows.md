@@ -16,7 +16,7 @@ question_types_suitable:
   - inference
   - vocabulary-in-context
   - figurative-language
-  - author's-intent
+  - authors-intent
 extract:
   start_phrase: "The Mole had been working very hard all the morning"
   end_phrase: "sent from the heart of the earth to be told at last to the insatiable sea."

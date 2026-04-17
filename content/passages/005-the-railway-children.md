@@ -15,7 +15,7 @@ themes: ["family", "change", "domestic-life", "loss"]
 question_types_suitable:
   - inference
   - retrieval
-  - author's-intent
+  - authors-intent
   - structure-and-organization
 extract:
   start_phrase: "They were not railway children to begin with."
@@ -23,7 +23,7 @@ extract:
   approximate_words: 700
 notes: |
   A rare opening that directly addresses the reader ("they were not railway
-  children to begin with"), which is gold for author's-intent questions
+  children to begin with"), which is gold for authors-intent questions
   (why does Nesbit open this way? what does addressing the reader achieve?).
   The passage describes the Bastable family's comfortable life before the
   disaster — dense with retrievable details (toys, the red-carpeted stairs,

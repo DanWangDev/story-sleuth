@@ -29,7 +29,7 @@ question_types_suitable:
   - retrieval
   - inference
   - vocabulary-in-context
-  - author's-intent
+  - authors-intent
   - figurative-language
   - structure-and-organization
 ---

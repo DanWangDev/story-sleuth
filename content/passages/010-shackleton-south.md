@@ -16,7 +16,7 @@ question_types_suitable:
   - inference
   - figurative-language
   - vocabulary-in-context
-  - author's-intent
+  - authors-intent
 extract:
   start_phrase: "The ice did not trouble us again seriously until the end of September"
   end_phrase: "No animal life observed."

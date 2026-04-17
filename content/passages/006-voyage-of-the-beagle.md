@@ -16,7 +16,7 @@ question_types_suitable:
   - retrieval
   - inference
   - vocabulary-in-context
-  - author's-intent
+  - authors-intent
 extract:
   start_phrase: "December 17th, 1832.—Having now finished with Patagonia and the Falkland Islands"
   end_phrase: "could not have been more complete than that between savage and civilized man."
@@ -27,7 +27,7 @@ notes: |
   deduce about his scientific method from how he writes?). Strong for
   vocabulary-in-context (aborigines, savage, civilized — note these
   reflect 19th-century attitudes, which itself is useful for
-  author's-intent questions at ISEB level). Period prose makes this
+  authors-intent questions at ISEB level). Period prose makes this
   a stretch difficulty; pair with easier passages for balance.
   Careful handling required: the language reflects colonial-era
   attitudes. Content pipeline should flag this for educator review.
