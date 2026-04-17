@@ -24,6 +24,7 @@ const testEnv: Env = {
   OIDC_REDIRECT_URI: "http://localhost:5180/api/auth/callback",
   SESSION_SECRET: "0".repeat(32),
   APP_SLUG: "reading",
+  ADMIN_ENCRYPTION_KEY: Buffer.alloc(32, 1).toString("base64"),
 };
 
 /** Minimal auth config that satisfies createAuthRoutes without hitting a real hub. */

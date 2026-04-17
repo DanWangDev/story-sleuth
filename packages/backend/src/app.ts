@@ -7,14 +7,17 @@ import type { AuthServerConfig } from "@danwangdev/auth-client/server";
 import type postgres from "postgres";
 import { createHealthRouter } from "./routes/health.js";
 import { createSessionsRouter } from "./routes/sessions.js";
+import { createAdminSettingsRouter } from "./routes/admin/settings.js";
 import { buildAuthConfig } from "./auth/auth-config.js";
-import { createRequireAuth } from "./auth/middleware.js";
+import { createRequireAuth, requireAdmin } from "./auth/middleware.js";
 import { PostgresUserMappingRepository } from "./repositories/postgres/postgres-user-mapping-repository.js";
 import { PostgresPassageRepository } from "./repositories/postgres/postgres-passage-repository.js";
 import { PostgresQuestionRepository } from "./repositories/postgres/postgres-question-repository.js";
 import { PostgresSessionRepository } from "./repositories/postgres/postgres-session-repository.js";
 import { PostgresStudentAttemptRepository } from "./repositories/postgres/postgres-student-attempt-repository.js";
+import { PostgresAdminSettingsRepository } from "./repositories/postgres/postgres-admin-settings-repository.js";
 import { SessionService } from "./services/session-service.js";
+import { SecretCrypto } from "./crypto/secret-crypto.js";
 import type { Env } from "./config/env.js";
 
 export interface AppDeps {
@@ -58,6 +61,9 @@ export function createApp(deps: AppDeps): Express {
   const questions = new PostgresQuestionRepository(deps.sql);
   const sessionRepo = new PostgresSessionRepository(deps.sql);
   const attempts = new PostgresStudentAttemptRepository(deps.sql);
+  const crypto = SecretCrypto.fromBase64(deps.env.ADMIN_ENCRYPTION_KEY);
+  const adminSettings = new PostgresAdminSettingsRepository(deps.sql, crypto);
+
   const sessionService = new SessionService(
     passages,
     questions,
@@ -76,6 +82,17 @@ export function createApp(deps: AppDeps): Express {
    * a subscription that covers APP_SLUG (checked inside requireAuth).
    */
   app.use("/api/sessions", requireAuth, createSessionsRouter(sessionService));
+
+  /**
+   * Admin endpoints — requireAuth then requireAdmin so a valid student
+   * token can never reach the settings surface even if they know the URL.
+   */
+  app.use(
+    "/api/admin/settings",
+    requireAuth,
+    requireAdmin,
+    createAdminSettingsRouter(adminSettings),
+  );
 
   return app;
 }

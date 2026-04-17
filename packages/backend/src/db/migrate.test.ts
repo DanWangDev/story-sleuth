@@ -45,6 +45,7 @@ describeIfDb("db migrations (integration)", () => {
       "004_sessions.sql",
       "005_student_attempts.sql",
       "006_ingest_jobs.sql",
+      "007_admin_settings.sql",
     ]);
     expect(result.skipped).toHaveLength(0);
   });
@@ -52,7 +53,7 @@ describeIfDb("db migrations (integration)", () => {
   it("is idempotent — re-running skips every already-applied migration", async () => {
     const result = await runMigrations({ sql, silent: true });
     expect(result.applied).toHaveLength(0);
-    expect(result.skipped).toHaveLength(6);
+    expect(result.skipped).toHaveLength(7);
   });
 
   it("creates every expected table", async () => {
@@ -64,6 +65,7 @@ describeIfDb("db migrations (integration)", () => {
       "sessions",
       "student_attempts",
       "ingest_jobs",
+      "admin_settings",
     ];
     const rows = await sql<{ tablename: string }[]>`
       SELECT tablename FROM pg_tables WHERE schemaname = 'public'

@@ -84,6 +84,9 @@ jobs:
           --health-retries=10
     env:
       DATABASE_URL: postgres://story_sleuth:story_sleuth@localhost:5432/story_sleuth
+      # Fixed test key — AES-256 needs 32 bytes; this is 32 null bytes
+      # in base64. Production uses a real random value (see .env.example).
+      ADMIN_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
