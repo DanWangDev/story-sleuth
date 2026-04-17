@@ -45,6 +45,32 @@ const EnvSchema = z.object({
    * student's subscription covers story-sleuth.
    */
   APP_SLUG: z.string().default("reading"),
+
+  /**
+   * Base64-encoded 32-byte key used to AES-256-GCM encrypt
+   * admin_settings values (LLM API keys etc.) at rest. Generate once
+   * per environment and never commit it.
+   *   node -e 'console.log(require("crypto").randomBytes(32).toString("base64"))'
+   * Boot refuses to start if this isn't a 32-byte key after decoding —
+   * silent misconfiguration here leaks API keys in DB backups, so the
+   * check is loud.
+   */
+  ADMIN_ENCRYPTION_KEY: z
+    .string()
+    .min(1, "ADMIN_ENCRYPTION_KEY is required")
+    .refine(
+      (v) => {
+        try {
+          return Buffer.from(v, "base64").length === 32;
+        } catch {
+          return false;
+        }
+      },
+      {
+        message:
+          "ADMIN_ENCRYPTION_KEY must be base64-encoded 32 bytes (see config/env.ts comment)",
+      },
+    ),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
