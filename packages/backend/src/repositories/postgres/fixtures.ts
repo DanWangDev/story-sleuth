@@ -78,22 +78,38 @@ export function questionCreateInput(
  * reference" — creates a user_mapping, a published passage, and N
  * published questions tied to it. Returns all the identifiers.
  */
+export interface SeedPublishedContentOptions {
+  questionCount?: number;
+  /**
+   * Hub OIDC sub for the seeded user_mapping. Tests for the stats API
+   * need a known value so they can look up the user after the fact.
+   * Defaults to a random one for test isolation.
+   */
+  hub_user_id?: string;
+}
+
 export async function seedPublishedContent(
   sql: postgres.Sql,
-  questionCount = 4,
+  options: SeedPublishedContentOptions | number = {},
 ): Promise<{
   user_id: number;
+  hub_user_id: string;
   passage_id: string;
   passage_version: number;
   question_ids: string[];
 }> {
+  // Back-compat: older callers pass the bare questionCount number.
+  const opts: SeedPublishedContentOptions =
+    typeof options === "number" ? { questionCount: options } : options;
+  const questionCount = opts.questionCount ?? 4;
+  const hub_user_id =
+    opts.hub_user_id ?? `test-user-${Math.random().toString(36).slice(2)}`;
+
   const userRepo = new PostgresUserMappingRepository(sql);
   const passageRepo = new PostgresPassageRepository(sql);
   const questionRepo = new PostgresQuestionRepository(sql);
 
-  const user = await userRepo.getOrCreate(
-    `test-user-${Math.random().toString(36).slice(2)}`,
-  );
+  const user = await userRepo.getOrCreate(hub_user_id);
   const passage = await passageRepo.create(
     passageCreateInput({ status: "published" }),
   );
@@ -105,6 +121,7 @@ export async function seedPublishedContent(
 
   return {
     user_id: user.id,
+    hub_user_id,
     passage_id: passage.id,
     passage_version: passage.version,
     question_ids: questions.map((q) => q.id),

@@ -11,8 +11,10 @@ import { createCoachRouter } from "./routes/coach.js";
 import { createAdminSettingsRouter } from "./routes/admin/settings.js";
 import { createAdminIngestRouter } from "./routes/admin/ingest.js";
 import { createAdminContentRouter } from "./routes/admin/content.js";
+import { createStatsRouter } from "./routes/stats.js";
 import { buildAuthConfig } from "./auth/auth-config.js";
 import { createRequireAuth, requireAdmin } from "./auth/middleware.js";
+import { createRequireHubService } from "./auth/service-auth.js";
 import { PostgresUserMappingRepository } from "./repositories/postgres/postgres-user-mapping-repository.js";
 import { PostgresPassageRepository } from "./repositories/postgres/postgres-passage-repository.js";
 import { PostgresQuestionRepository } from "./repositories/postgres/postgres-question-repository.js";
@@ -32,6 +34,12 @@ export interface AppDeps {
   env: Env;
   sql: postgres.Sql;
   authConfigOverride?: AuthServerConfig;
+  /**
+   * Override the service-JWT middleware. Tests inject a stub verifier
+   * so we don't need a live hub JWKS endpoint. In production the app
+   * builds its own via OIDC discovery against OIDC_ISSUER.
+   */
+  hubServiceAuthOverride?: import("express").RequestHandler;
 }
 
 export function createApp(deps: AppDeps): Express {
@@ -115,6 +123,22 @@ export function createApp(deps: AppDeps): Express {
     requireAuth,
     requireAdmin,
     createAdminContentRouter(passages, questions),
+  );
+
+  // Service-to-service stats endpoint (hub reads this for its parent
+  // dashboard). Auth is a hub-signed JWT, NOT a user session — tokens
+  // meant for students won't satisfy requireHubService.
+  const requireHubService =
+    deps.hubServiceAuthOverride ??
+    createRequireHubService({
+      issuer: deps.env.OIDC_ISSUER,
+      internal_issuer: deps.env.OIDC_INTERNAL_ISSUER,
+      audience: deps.env.APP_SLUG,
+    });
+  app.use(
+    "/api/stats",
+    requireHubService,
+    createStatsRouter(userMappings, attempts),
   );
 
   return app;
