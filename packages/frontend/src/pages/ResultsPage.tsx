@@ -178,6 +178,7 @@ export function ResultsPage(): React.ReactElement {
           {results.questions.map((q, i) => (
             <CoachingCard
               key={q.id}
+              sessionId={results.session.id}
               question={q}
               attempt={attemptsByQid.get(q.id)}
               index={i}

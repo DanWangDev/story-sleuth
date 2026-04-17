@@ -7,6 +7,7 @@ import type { AuthServerConfig } from "@danwangdev/auth-client/server";
 import type postgres from "postgres";
 import { createHealthRouter } from "./routes/health.js";
 import { createSessionsRouter } from "./routes/sessions.js";
+import { createCoachRouter } from "./routes/coach.js";
 import { createAdminSettingsRouter } from "./routes/admin/settings.js";
 import { buildAuthConfig } from "./auth/auth-config.js";
 import { createRequireAuth, requireAdmin } from "./auth/middleware.js";
@@ -17,7 +18,9 @@ import { PostgresSessionRepository } from "./repositories/postgres/postgres-sess
 import { PostgresStudentAttemptRepository } from "./repositories/postgres/postgres-student-attempt-repository.js";
 import { PostgresAdminSettingsRepository } from "./repositories/postgres/postgres-admin-settings-repository.js";
 import { SessionService } from "./services/session-service.js";
+import { CoachService } from "./services/coach-service.js";
 import { SecretCrypto } from "./crypto/secret-crypto.js";
+import { LLMFactory } from "./llm/factory.js";
 import type { Env } from "./config/env.js";
 
 export interface AppDeps {
@@ -70,6 +73,14 @@ export function createApp(deps: AppDeps): Express {
     sessionRepo,
     attempts,
   );
+  const llmFactory = new LLMFactory(adminSettings);
+  const coachService = new CoachService(
+    sessionRepo,
+    attempts,
+    questions,
+    passages,
+    llmFactory,
+  );
 
   const requireAuth = createRequireAuth({
     config: authConfig,
@@ -82,6 +93,13 @@ export function createApp(deps: AppDeps): Express {
    * a subscription that covers APP_SLUG (checked inside requireAuth).
    */
   app.use("/api/sessions", requireAuth, createSessionsRouter(sessionService));
+
+  /**
+   * Live coach walk-through. Separate mount so the rate limiter only
+   * applies to this one path, not the whole session surface.
+   *   POST /api/coach/sessions/:sessionId/attempts/:attemptId/walkthrough
+   */
+  app.use("/api/coach", requireAuth, createCoachRouter(coachService));
 
   /**
    * Admin endpoints — requireAuth then requireAdmin so a valid student
