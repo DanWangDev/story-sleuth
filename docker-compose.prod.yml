@@ -1,0 +1,85 @@
+# Production compose for story-sleuth.
+#
+# Pulls pre-built images from GHCR (published by CI on every push to main)
+# rather than building locally. Drive it with deploy.sh:
+#
+#   ./deploy.sh
+#
+# Env vars (see .env.example for the full list):
+#   POSTGRES_PASSWORD       — must NOT be the dev default
+#   CLOUDFLARE_TUNNEL_TOKEN — get from Cloudflare Zero Trust dashboard
+#   IMAGE_TAG               — defaults to "latest"; pin to a SHA for rollbacks
+#   OIDC_*                  — credentials registered with 11plus-hub
+#   SESSION_SECRET          — 32+ bytes, rotate invalidates all sessions
+#   ADMIN_ENCRYPTION_KEY    — base64 32 bytes, rotating loses stored LLM keys
+#
+# The Cloudflare tunnel terminates TLS and reaches frontend:80 internally,
+# so no host port is exposed for the frontend. Postgres is also
+# network-internal — there's no "ports:" block on it.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-story_sleuth}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in production}
+      POSTGRES_DB: ${POSTGRES_DB:-story_sleuth}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-story_sleuth} -d ${POSTGRES_DB:-story_sleuth}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    image: ghcr.io/danwangdev/story-sleuth-backend:${IMAGE_TAG:-latest}
+    pull_policy: always
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - PORT=5060
+      - DATABASE_URL=postgres://${POSTGRES_USER:-story_sleuth}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-story_sleuth}
+      # Hard-pin to the image's bundled manifests. Overrides any
+      # CONTENT_PATH pulled in from .env (that's a dev-only path).
+      - CONTENT_PATH=/app/content/passages
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5060/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  frontend:
+    image: ghcr.io/danwangdev/story-sleuth-frontend:${IMAGE_TAG:-latest}
+    pull_policy: always
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  cloudflared:
+    # Terminates https://<your-tunnel-hostname> and forwards to frontend:80.
+    # Configure the public hostname → http://frontend:80 mapping in the
+    # Cloudflare Zero Trust dashboard, NOT here. The token is all this
+    # service needs.
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN is required}
+    depends_on:
+      - frontend
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
