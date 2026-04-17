@@ -9,6 +9,8 @@ import { createHealthRouter } from "./routes/health.js";
 import { createSessionsRouter } from "./routes/sessions.js";
 import { createCoachRouter } from "./routes/coach.js";
 import { createAdminSettingsRouter } from "./routes/admin/settings.js";
+import { createAdminIngestRouter } from "./routes/admin/ingest.js";
+import { createAdminContentRouter } from "./routes/admin/content.js";
 import { buildAuthConfig } from "./auth/auth-config.js";
 import { createRequireAuth, requireAdmin } from "./auth/middleware.js";
 import { PostgresUserMappingRepository } from "./repositories/postgres/postgres-user-mapping-repository.js";
@@ -17,10 +19,13 @@ import { PostgresQuestionRepository } from "./repositories/postgres/postgres-que
 import { PostgresSessionRepository } from "./repositories/postgres/postgres-session-repository.js";
 import { PostgresStudentAttemptRepository } from "./repositories/postgres/postgres-student-attempt-repository.js";
 import { PostgresAdminSettingsRepository } from "./repositories/postgres/postgres-admin-settings-repository.js";
+import { PostgresIngestJobRepository } from "./repositories/postgres/postgres-ingest-job-repository.js";
 import { SessionService } from "./services/session-service.js";
 import { CoachService } from "./services/coach-service.js";
 import { SecretCrypto } from "./crypto/secret-crypto.js";
 import { LLMFactory } from "./llm/factory.js";
+import { ManifestLoader } from "./content/manifest-loader.js";
+import { ContentPipeline } from "./content/content-pipeline.js";
 import type { Env } from "./config/env.js";
 
 export interface AppDeps {
@@ -44,29 +49,21 @@ export function createApp(deps: AppDeps): Express {
   app.use(express.urlencoded({ extended: false }));
   app.use(cookieParser());
 
-  /**
-   * Auth-client routes at /api/auth:
-   *   GET  /api/auth/login
-   *   GET  /api/auth/callback
-   *   POST /api/auth/logout
-   *   GET  /api/auth/me
-   *   POST /api/auth/backchannel-logout  (enabled by backchannelLogout: true)
-   */
   const authRouter = createAuthRoutes({ ...authConfig, basePath: "/auth" });
   app.use("/api", authRouter);
-
-  // Public health check — never gated.
   app.use("/api", createHealthRouter());
 
-  // Repositories + service wiring.
+  // Repositories.
   const userMappings = new PostgresUserMappingRepository(deps.sql);
   const passages = new PostgresPassageRepository(deps.sql);
   const questions = new PostgresQuestionRepository(deps.sql);
   const sessionRepo = new PostgresSessionRepository(deps.sql);
   const attempts = new PostgresStudentAttemptRepository(deps.sql);
+  const ingestJobs = new PostgresIngestJobRepository(deps.sql);
   const crypto = SecretCrypto.fromBase64(deps.env.ADMIN_ENCRYPTION_KEY);
   const adminSettings = new PostgresAdminSettingsRepository(deps.sql, crypto);
 
+  // Services.
   const sessionService = new SessionService(
     passages,
     questions,
@@ -81,6 +78,14 @@ export function createApp(deps: AppDeps): Express {
     passages,
     llmFactory,
   );
+  const manifestLoader = new ManifestLoader(deps.env.CONTENT_PATH);
+  const contentPipeline = new ContentPipeline(
+    manifestLoader,
+    passages,
+    questions,
+    ingestJobs,
+    llmFactory,
+  );
 
   const requireAuth = createRequireAuth({
     config: authConfig,
@@ -88,28 +93,28 @@ export function createApp(deps: AppDeps): Express {
     required_app_slug: deps.env.APP_SLUG,
   });
 
-  /**
-   * Student session endpoints — every route requires a valid session and
-   * a subscription that covers APP_SLUG (checked inside requireAuth).
-   */
+  // Student endpoints.
   app.use("/api/sessions", requireAuth, createSessionsRouter(sessionService));
-
-  /**
-   * Live coach walk-through. Separate mount so the rate limiter only
-   * applies to this one path, not the whole session surface.
-   *   POST /api/coach/sessions/:sessionId/attempts/:attemptId/walkthrough
-   */
   app.use("/api/coach", requireAuth, createCoachRouter(coachService));
 
-  /**
-   * Admin endpoints — requireAuth then requireAdmin so a valid student
-   * token can never reach the settings surface even if they know the URL.
-   */
+  // Admin endpoints — requireAuth then requireAdmin.
   app.use(
     "/api/admin/settings",
     requireAuth,
     requireAdmin,
     createAdminSettingsRouter(adminSettings),
+  );
+  app.use(
+    "/api/admin/ingest",
+    requireAuth,
+    requireAdmin,
+    createAdminIngestRouter(contentPipeline, ingestJobs, manifestLoader),
+  );
+  app.use(
+    "/api/admin/content",
+    requireAuth,
+    requireAdmin,
+    createAdminContentRouter(passages, questions),
   );
 
   return app;

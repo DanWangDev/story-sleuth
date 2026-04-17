@@ -15,7 +15,7 @@ themes: ["isolation", "neglect", "character", "change"]
 question_types_suitable:
   - inference
   - vocabulary-in-context
-  - author's-intent
+  - authors-intent
   - retrieval
 extract:
   start_phrase: "When Mary Lennox was sent to Misselthwaite Manor"

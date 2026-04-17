@@ -71,6 +71,14 @@ const EnvSchema = z.object({
           "ADMIN_ENCRYPTION_KEY must be base64-encoded 32 bytes (see config/env.ts comment)",
       },
     ),
+
+  /**
+   * Directory containing passage manifest .md files. In dev the default
+   * resolves to the repo's `content/passages/` (relative to the backend
+   * package's cwd). In docker, the backend Dockerfile copies the same
+   * directory to /app/content/passages and overrides this env var.
+   */
+  CONTENT_PATH: z.string().default("../../content/passages"),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

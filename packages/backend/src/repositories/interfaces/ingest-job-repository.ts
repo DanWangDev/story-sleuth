@@ -17,7 +17,11 @@ export interface IngestJobRepository {
   /** Mark a job as running (stamps a new started_at). */
   markRunning(id: string): Promise<IngestJob>;
 
-  /** Mark a job completed or failed. `error_log` only honoured on failed. */
+  /**
+   * Mark a job completed or failed. `error_log` is persisted regardless
+   * of status — a completed job may still have diagnostic output from
+   * partial failures (e.g. 7/8 questions generated, 1 rejected).
+   */
   markFinished(
     id: string,
     status: Extract<IngestJobStatus, "completed" | "failed">,

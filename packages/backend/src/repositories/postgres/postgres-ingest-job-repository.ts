@@ -99,7 +99,7 @@ export class PostgresIngestJobRepository implements IngestJobRepository {
           questions_generated = ${counters.questions_generated},
           questions_failed = ${counters.questions_failed},
           completed_at = NOW(),
-          error_log = ${status === "failed" ? (error_log ?? null) : null}
+          error_log = ${error_log ?? null}
       WHERE id = ${id}
       RETURNING ${this.sql.unsafe(SELECT_COLS)}
     `;

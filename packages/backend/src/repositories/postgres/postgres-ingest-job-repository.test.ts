@@ -56,7 +56,7 @@ d("PostgresIngestJobRepository", () => {
     expect(running.status).toBe("running");
   });
 
-  it("markFinished completed stamps completed_at and counters; clears error_log", async () => {
+  it("markFinished completed stamps completed_at and counters; preserves error_log (for partial failures)", async () => {
     const job = await repo.create({
       passage_manifest_id: 4,
       triggered_by_user_id: adminUserId,
@@ -66,12 +66,26 @@ d("PostgresIngestJobRepository", () => {
       job.id,
       "completed",
       { questions_generated: 7, questions_failed: 1 },
-      "should be ignored",
+      "partial: 1 question failed",
     );
     expect(done.status).toBe("completed");
     expect(done.questions_generated).toBe(7);
     expect(done.questions_failed).toBe(1);
     expect(done.completed_at).not.toBeNull();
+    expect(done.error_log).toBe("partial: 1 question failed");
+  });
+
+  it("markFinished completed with no error_log leaves it null", async () => {
+    const job = await repo.create({
+      passage_manifest_id: 11,
+      triggered_by_user_id: adminUserId,
+    });
+    await repo.markRunning(job.id);
+    const done = await repo.markFinished(job.id, "completed", {
+      questions_generated: 8,
+      questions_failed: 0,
+    });
+    expect(done.status).toBe("completed");
     expect(done.error_log).toBeNull();
   });
 

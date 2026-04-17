@@ -16,7 +16,7 @@ question_types_suitable:
   - retrieval
   - inference
   - vocabulary-in-context
-  - author's-intent
+  - authors-intent
 extract:
   start_phrase: "As to swallows (hirundines rusticae) being found in a torpid state"
   end_phrase: "on September the 22nd, 1768."

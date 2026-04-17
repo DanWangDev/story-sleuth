@@ -25,6 +25,7 @@ const testEnv: Env = {
   SESSION_SECRET: "0".repeat(32),
   APP_SLUG: "reading",
   ADMIN_ENCRYPTION_KEY: Buffer.alloc(32, 1).toString("base64"),
+  CONTENT_PATH: "../../content/passages",
 };
 
 /** Minimal auth config that satisfies createAuthRoutes without hitting a real hub. */

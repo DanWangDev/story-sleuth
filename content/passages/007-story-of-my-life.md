@@ -15,7 +15,7 @@ themes: ["memory", "family", "illness", "childhood", "identity"]
 question_types_suitable:
   - retrieval
   - inference
-  - author's-intent
+  - authors-intent
   - vocabulary-in-context
 extract:
   start_phrase: "The beginning of my life was simple and much like every other little life."

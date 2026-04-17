@@ -16,7 +16,7 @@ question_types_suitable:
   - inference
   - vocabulary-in-context
   - figurative-language
-  - author's-intent
+  - authors-intent
 extract:
   start_phrase: "Alice was beginning to get very tired of sitting by her sister"
   end_phrase: "she found she could not remember the name of anything."
