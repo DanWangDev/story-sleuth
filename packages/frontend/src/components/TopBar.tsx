@@ -29,6 +29,16 @@ export function TopBar({ right }: TopBarProps): React.ReactElement {
         </Link>
         <div className="flex items-center gap-4">
           {right}
+          {state.status === "authenticated" &&
+            state.user.role === "admin" && (
+              <Link
+                to="/admin"
+                className="text-sm no-underline"
+                style={{ color: "var(--color-ink-muted)" }}
+              >
+                Admin
+              </Link>
+            )}
           {state.status === "authenticated" && (
             <button
               type="button"
