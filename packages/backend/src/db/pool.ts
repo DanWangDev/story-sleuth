@@ -25,9 +25,9 @@ export function createPool(opts: PoolOptions = {}): postgres.Sql {
     max: opts.max ?? 10,
     idle_timeout: 20,
     connect_timeout: 10,
-    // Avoid surprises from postgres.js's implicit default schema search:
-    // we pin to public so tests can assert table presence deterministically.
-    transform: postgres.camel,
+    // Intentionally NO camelCase transform: our Zod schemas use snake_case
+    // to match SQL column names exactly. One consistent casing across DB
+    // rows, JSON payloads, and type definitions avoids a mapping layer.
   });
 }
 
