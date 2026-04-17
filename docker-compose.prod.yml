@@ -39,6 +39,7 @@ services:
 
   backend:
     image: ghcr.io/danwangdev/story-sleuth-backend:${IMAGE_TAG:-latest}
+    container_name: story-sleuth-backend
     pull_policy: always
     env_file:
       - .env
@@ -49,6 +50,9 @@ services:
       # Hard-pin to the image's bundled manifests. Overrides any
       # CONTENT_PATH pulled in from .env (that's a dev-only path).
       - CONTENT_PATH=/app/content/passages
+      # Reach hub over labf-net by container name. Overrides whatever
+      # OIDC_INTERNAL_ISSUER might be set to in .env.
+      - OIDC_INTERNAL_ISSUER=${OIDC_INTERNAL_ISSUER:-http://hub-backend:3009}
     depends_on:
       postgres:
         condition: service_healthy
@@ -58,10 +62,14 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+    networks:
+      - default
+      - labf-net
     restart: unless-stopped
 
   frontend:
     image: ghcr.io/danwangdev/story-sleuth-frontend:${IMAGE_TAG:-latest}
+    container_name: story-sleuth-frontend
     pull_policy: always
     depends_on:
       backend:
@@ -83,3 +91,11 @@ services:
 
 volumes:
   postgres-data:
+
+# Shared cross-app network. Create once with ./bootstrap.sh on the host.
+# Backend joins it for hub OIDC + stats API; postgres and frontend stay
+# on the project-private `default` network.
+networks:
+  labf-net:
+    external: true
+    name: labf-net

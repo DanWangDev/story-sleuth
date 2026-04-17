@@ -20,6 +20,7 @@ services:
     build:
       context: .
       dockerfile: packages/backend/Dockerfile
+    container_name: story-sleuth-backend
     ports:
       - "5060:5060"
     env_file:
@@ -29,9 +30,14 @@ services:
       - PORT=5060
       - DATABASE_URL=postgres://story_sleuth:story_sleuth@postgres:5432/story_sleuth
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:5065}
+      # Reach hub over labf-net by its container name, not localhost.
+      - OIDC_INTERNAL_ISSUER=${OIDC_INTERNAL_ISSUER:-http://hub-backend:3009}
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - default
+      - labf-net
     restart: unless-stopped
 
   frontend:
@@ -41,6 +47,7 @@ services:
       args:
         VITE_API_URL: /api
         VITE_HUB_URL: ${VITE_HUB_URL:-http://localhost:3009}
+    container_name: story-sleuth-frontend
     ports:
       - "5065:80"
     depends_on:
@@ -49,3 +56,13 @@ services:
 
 volumes:
   postgres-data:
+
+# Shared cross-app network. Must be created once on the host before
+# `docker compose up`: see bootstrap.sh / bootstrap.ps1.
+#
+# Only the backend joins labf-net — postgres stays on the project-private
+# `default` network, unreachable from other apps by default.
+networks:
+  labf-net:
+    external: true
+    name: labf-net
