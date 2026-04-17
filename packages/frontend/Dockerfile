@@ -4,9 +4,10 @@ WORKDIR /app
 
 COPY packages/shared/package.json packages/shared/
 COPY packages/frontend/package.json packages/frontend/
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json .npmrc ./
 
-RUN npm ci --workspace=packages/shared --workspace=packages/frontend --include-workspace-root
+ARG NODE_AUTH_TOKEN
+RUN NODE_AUTH_TOKEN=${NODE_AUTH_TOKEN} npm ci --workspace=packages/shared --workspace=packages/frontend --include-workspace-root
 
 COPY packages/shared/ packages/shared/
 COPY packages/frontend/ packages/frontend/
