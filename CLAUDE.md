@@ -105,6 +105,16 @@ CI publishes Docker images to GitHub Container Registry on every push to `main`:
 
 Images are tagged with the commit SHA (always) and `latest` (on main only). Authentication uses `GITHUB_TOKEN` (no extra secrets required). Pulls require `packages: read` permission on the registry.
 
+## Docker Networking
+
+The backend joins the shared `labf-net` Docker bridge (alongside its default project network) to reach hub-backend for OIDC discovery and JWKS. The network is `external: true` in Compose — create it once per host:
+
+```bash
+./bootstrap.sh    # idempotent, safe to re-run
+```
+
+Hub owns the canonical bootstrap; see [11plus-hub](https://github.com/DanWangDev/11plus-hub). This repo carries a copy for self-service setup.
+
 ## Skill routing
 
 When the user's request matches an available skill, ALWAYS invoke it using the Skill
