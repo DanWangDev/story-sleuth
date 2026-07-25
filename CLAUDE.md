@@ -115,6 +115,19 @@ The backend joins the shared `labf-net` Docker bridge (alongside its default pro
 
 Hub owns the canonical bootstrap; see [11plus-hub](https://github.com/DanWangDev/11plus-hub). This repo carries a copy for self-service setup.
 
+## Continuous Delivery
+
+Deployment is automated via a self-hosted GitHub Actions runner on the NAS (same host as all other suite apps). When CI completes on `main` and pushes a new image to GHCR, the deploy workflow triggers:
+
+```
+GitHub CI → push image to GHCR → deploy workflow (.github/workflows/deploy.yml) → NAS runner → docker compose pull && up -d
+```
+
+- **Runner:** Docker container (`ghcr.io/actions/actions-runner`) registered at org level with `nas` label
+- **Networking:** Outbound HTTPS only — no inbound ports, no SSH exposed
+- **Repository path:** `/volume1/docker/story-sleuth` on the NAS
+- **Manual deploy:** `./deploy.sh` still works for ad-hoc deploys or rollbacks (`IMAGE_TAG=<sha> ./deploy.sh`)
+
 ## Skill routing
 
 When the user's request matches an available skill, ALWAYS invoke it using the Skill
