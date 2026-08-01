@@ -17,11 +17,11 @@
 
 set -euo pipefail
 
-# Detects docker compose (plugin, v2+) or docker-compose (standalone, e.g. Synology DSM)
-if docker compose version >/dev/null 2>&1; then
-  COMPOSE="docker compose"
-else
+# Prefer docker-compose (Synology DSM) over docker compose (Docker plugin)
+if command -v docker-compose >/dev/null 2>&1; then
   COMPOSE="docker-compose"
+else
+  COMPOSE="docker compose"
 fi
 
 cd "$(dirname "$0")"
