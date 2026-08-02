@@ -85,8 +85,8 @@ $COMPOSE -f "$COMPOSE_FILE" run --rm --no-deps \
   --entrypoint "" backend \
   node dist/db/migrate-cli.js
 
-echo "deploy: bringing up backend + frontend + tunnel..."
-$COMPOSE -f "$COMPOSE_FILE" up -d backend frontend cloudflared
+echo "deploy: bringing up backend + frontend..."
+$COMPOSE -f "$COMPOSE_FILE" up -d backend frontend
 
 echo "deploy: waiting for backend health..."
 for i in {1..30}; do
