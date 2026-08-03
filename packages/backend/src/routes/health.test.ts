@@ -23,7 +23,7 @@ const testEnv: Env = {
   OIDC_CLIENT_SECRET: "",
   OIDC_REDIRECT_URI: "http://localhost:5180/api/auth/callback",
   SESSION_SECRET: "0".repeat(32),
-  APP_SLUG: "reading",
+  APP_SLUG: "story-sleuth",
   ADMIN_ENCRYPTION_KEY: Buffer.alloc(32, 1).toString("base64"),
   CONTENT_PATH: "../../content/passages",
 };
