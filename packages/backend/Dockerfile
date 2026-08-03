@@ -33,6 +33,10 @@ COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 COPY --from=builder /app/packages/shared/package.json ./packages/shared/
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/node_modules ./node_modules
+
+# Patch shared main for prod — TypeScript needs src/index.ts during CI,
+# but only dist/ files exist at runtime.
+RUN sed -i 's|"main": "src/index.ts"|"main": "dist/index.js"|' /app/packages/shared/package.json
 # Passage manifests travel with the image so the admin ingest pipeline
 # can load them at runtime. CONTENT_PATH defaults to this location.
 COPY content/passages/ ./content/passages/
