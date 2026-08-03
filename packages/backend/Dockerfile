@@ -29,6 +29,9 @@ RUN addgroup -S app && adduser -S app -G app
 
 COPY --from=builder /app/packages/backend/dist ./dist
 COPY --from=builder /app/packages/backend/package.json ./
+COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder /app/packages/shared/package.json ./packages/shared/
+COPY --from=builder /app/package.json ./
 COPY --from=builder /app/node_modules ./node_modules
 # Passage manifests travel with the image so the admin ingest pipeline
 # can load them at runtime. CONTENT_PATH defaults to this location.
