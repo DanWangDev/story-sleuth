@@ -4,16 +4,8 @@
 # Usage:   ./deploy.sh
 # Rollback: IMAGE_TAG=<commit-sha> ./deploy.sh
 #
-# Requires: docker, $COMPOSE, .env populated from .env.example.
-#
-# Flow:
-#   1. Pull latest images from GHCR (or a pinned IMAGE_TAG).
-#   2. Start Postgres + wait for it to be healthy.
-#   3. Run migrations via a one-shot backend container.
-#   4. Bring up backend, frontend, cloudflared.
-#   5. Wait for /api/health to return 200, then print a summary.
-#
-# Exits non-zero on any step that fails so systemd/cron retries stay sane.
+# Uses shared labf-db PostgreSQL (see DanWangDev/labf-infra).
+# Cloudflare Tunnel runs as a separate NAS container.
 
 set -euo pipefail
 
@@ -29,25 +21,25 @@ cd "$(dirname "$0")"
 COMPOSE_FILE="docker-compose.prod.yml"
 ENV_FILE=".env"
 
-if [[ ! -f "$ENV_FILE" ]]; then
+if [ ! -f "$ENV_FILE" ]; then
   echo "deploy: $ENV_FILE not found — copy .env.example and fill it in first." >&2
   exit 1
 fi
 
-# Check critical vars are set (compose's ${VAR:?msg} would also catch these,
-# but a clearer up-front message is kinder than a mid-pull failure).
-missing=()
-# shellcheck disable=SC1090
+# Check critical vars
+missing=""
 set -o allexport; source "$ENV_FILE"; set +o allexport
-for var in POSTGRES_PASSWORD CLOUDFLARE_TUNNEL_TOKEN OIDC_CLIENT_SECRET \
-           SESSION_SECRET ADMIN_ENCRYPTION_KEY; do
-  if [[ -z "${!var:-}" || "${!var}" == "replace-me"* ]]; then
-    missing+=("$var")
+for var in OIDC_CLIENT_SECRET SESSION_SECRET ADMIN_ENCRYPTION_KEY; do
+  eval "val=\${$var:-}"
+  if [ -z "$val" ] || echo "$val" | grep -q "^replace-me"; then
+    missing="$missing $var"
   fi
 done
-if (( ${#missing[@]} > 0 )); then
+if [ -n "$missing" ]; then
   echo "deploy: the following env vars are unset or still the placeholder:" >&2
-  printf '  - %s\n' "${missing[@]}" >&2
+  for v in $missing; do
+    echo "  - $v" >&2
+  done
   exit 1
 fi
 
@@ -57,30 +49,7 @@ echo "deploy: using IMAGE_TAG=$IMAGE_TAG"
 echo "deploy: pulling images..."
 $COMPOSE -f "$COMPOSE_FILE" pull
 
-echo "deploy: starting postgres..."
-$COMPOSE -f "$COMPOSE_FILE" up -d postgres
-# $COMPOSE won't return until the healthcheck reports healthy when
-# another service depends on it with condition: service_healthy, but the
-# explicit wait makes failure noisy here instead of inside the migrate run.
-echo "deploy: waiting for postgres to be healthy..."
-for i in {1..30}; do
-  if $COMPOSE -f "$COMPOSE_FILE" ps postgres --format '{{.Health}}' \
-        | grep -q healthy; then
-    echo "deploy: postgres is healthy."
-    break
-  fi
-  sleep 2
-  if (( i == 30 )); then
-    echo "deploy: postgres failed to become healthy in 60s. Check logs:" >&2
-    $COMPOSE -f "$COMPOSE_FILE" logs --tail=50 postgres >&2
-    exit 1
-  fi
-done
-
 echo "deploy: running migrations..."
-# Use --rm + --no-deps so we don't spin up the long-running backend
-# service by accident. The migrate:prod script reads DATABASE_URL from
-# the same env the backend uses.
 $COMPOSE -f "$COMPOSE_FILE" run --rm --no-deps \
   --entrypoint "" backend \
   node dist/db/migrate-cli.js
@@ -89,15 +58,14 @@ echo "deploy: bringing up backend + frontend..."
 $COMPOSE -f "$COMPOSE_FILE" up -d backend frontend
 
 echo "deploy: waiting for backend health..."
-for i in {1..30}; do
-  if $COMPOSE -f "$COMPOSE_FILE" ps backend --format '{{.Health}}' \
-        | grep -q healthy; then
+for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
+  if $COMPOSE -f "$COMPOSE_FILE" exec -T backend wget -qO- http://localhost:5060/api/health >/dev/null 2>&1; then
     echo "deploy: backend is healthy."
     break
   fi
   sleep 2
-  if (( i == 30 )); then
-    echo "deploy: backend failed to become healthy in 60s. Last logs:" >&2
+  if [ "$i" -eq 30 ]; then
+    echo "deploy: backend failed to become healthy in 60s." >&2
     $COMPOSE -f "$COMPOSE_FILE" logs --tail=80 backend >&2
     exit 1
   fi
