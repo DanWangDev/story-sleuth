@@ -33,7 +33,7 @@ export function createStatsRouter(
           return;
         }
         const summary = await attempts.getUserStatsSummary(mapping.id);
-        res.json({ hub_user_id: hubUserId, app: "reading", ...summary });
+        res.json({ hub_user_id: hubUserId, app: "story-sleuth", ...summary });
       } catch (err) {
         if (err instanceof z.ZodError) {
           res.status(400).json({ error: "invalid_request" });
@@ -49,7 +49,7 @@ export function createStatsRouter(
 
 function emptyStats(hubUserId: string): {
   hub_user_id: string;
-  app: "reading";
+  app: "story-sleuth";
   questions_answered: number;
   questions_correct: number;
   overall_accuracy: number;
@@ -61,7 +61,7 @@ function emptyStats(hubUserId: string): {
 } {
   return {
     hub_user_id: hubUserId,
-    app: "reading",
+    app: "story-sleuth",
     questions_answered: 0,
     questions_correct: 0,
     overall_accuracy: 0,

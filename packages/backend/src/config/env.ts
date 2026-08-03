@@ -44,7 +44,7 @@ const EnvSchema = z.object({
    * `apps` claim of issued tokens; middleware can enforce that the
    * student's subscription covers story-sleuth.
    */
-  APP_SLUG: z.string().default("reading"),
+  APP_SLUG: z.string().default("story-sleuth"),
 
   /**
    * Base64-encoded 32-byte key used to AES-256-GCM encrypt
