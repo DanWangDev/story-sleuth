@@ -9,7 +9,7 @@ import {
 function appWith(verifyFn: (t: string) => Promise<HubServiceClaims>) {
   const app = express();
   const guard = createRequireHubService(
-    { issuer: "https://example.test", audience: "reading" },
+    { issuer: "https://example.test", audience: "story-sleuth" },
     { verify_fn: verifyFn },
   );
   app.get("/ping", guard, (req, res) => {
@@ -53,7 +53,7 @@ describe("createRequireHubService", () => {
     const verify = vi.fn(
       async (): Promise<HubServiceClaims> => ({
         iss: "https://example.test",
-        aud: "reading",
+        aud: "story-sleuth",
         sub: "user-42", // NOT hub-service — a user token can't be replayed
       }),
     );
@@ -69,7 +69,7 @@ describe("createRequireHubService", () => {
     const verify = vi.fn(
       async (): Promise<HubServiceClaims> => ({
         iss: "https://example.test",
-        aud: "reading",
+        aud: "story-sleuth",
         sub: "hub-service",
       }),
     );
@@ -86,13 +86,13 @@ describe("createRequireHubService", () => {
     const guard = createRequireHubService(
       {
         issuer: "https://example.test",
-        audience: "reading",
+        audience: "story-sleuth",
         expected_sub: "hub-parent-dashboard",
       },
       {
         verify_fn: async () => ({
           iss: "https://example.test",
-          aud: "reading",
+          aud: "story-sleuth",
           sub: "hub-parent-dashboard",
         }),
       },

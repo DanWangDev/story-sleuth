@@ -51,7 +51,7 @@ function testAuth(): RequestHandler {
       claims: {
         sub: `test-sub-${user_id}`,
         role: "student",
-        apps: ["reading"],
+        apps: ["story-sleuth"],
       } as AuthContext["claims"],
     };
     (req as Request & { auth?: AuthContext }).auth = ctx;

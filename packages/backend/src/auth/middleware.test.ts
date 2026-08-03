@@ -118,9 +118,9 @@ function makeHubUser(overrides: Partial<HubUser> = {}): HubUser {
     username: "student",
     display_name: "A Student",
     role: "student",
-    plan: "reading",
+    plan: "story-sleuth",
     features: [],
-    apps: ["reading"],
+    apps: ["story-sleuth"],
     ...overrides,
   } as HubUser;
 }
@@ -221,21 +221,21 @@ describe("post-auth middleware (user mapping, revocation, subscription, admin)",
     const users = new InMemoryUserMappings();
     const user = makeHubUser({ sub: "student-nosub", apps: ["writing"] });
     const res = await request(
-      makeApp({ user, users, required_app_slug: "reading" }),
+      makeApp({ user, users, required_app_slug: "story-sleuth" }),
     ).get("/whoami");
     expect(res.status).toBe(403);
     expect(res.body.error).toBe("subscription_required");
-    expect(res.body.required_app).toBe("reading");
+    expect(res.body.required_app).toBe("story-sleuth");
   });
 
   it("200 when apps claim includes the app slug", async () => {
     const users = new InMemoryUserMappings();
     const user = makeHubUser({
       sub: "student-ok",
-      apps: ["reading", "writing"],
+      apps: ["story-sleuth", "writing"],
     });
     const res = await request(
-      makeApp({ user, users, required_app_slug: "reading" }),
+      makeApp({ user, users, required_app_slug: "story-sleuth" }),
     ).get("/whoami");
     expect(res.status).toBe(200);
   });

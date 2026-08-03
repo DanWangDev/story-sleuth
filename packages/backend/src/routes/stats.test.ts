@@ -23,7 +23,7 @@ const testEnv: Env = {
   OIDC_CLIENT_SECRET: "dev-secret",
   OIDC_REDIRECT_URI: "http://localhost:5180/api/auth/callback",
   SESSION_SECRET: "0".repeat(32),
-  APP_SLUG: "reading",
+  APP_SLUG: "story-sleuth",
   ADMIN_ENCRYPTION_KEY: randomBytes(32).toString("base64"),
   CONTENT_PATH: "../../content/passages",
 };
@@ -71,7 +71,7 @@ d("GET /api/stats/:hubUserId (integration)", () => {
         }
         req.service_auth = {
           iss: "http://localhost:3009",
-          aud: "reading",
+          aud: "story-sleuth",
           sub: hubSub,
         };
         next();
@@ -91,7 +91,7 @@ d("GET /api/stats/:hubUserId (integration)", () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
       hub_user_id: "hub-user-never-opened",
-      app: "reading",
+      app: "story-sleuth",
       questions_answered: 0,
       questions_correct: 0,
       overall_accuracy: 0,
@@ -190,7 +190,7 @@ d("GET /api/stats/:hubUserId (integration)", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.hub_user_id).toBe(hubSub);
-    expect(res.body.app).toBe("reading");
+    expect(res.body.app).toBe("story-sleuth");
 
     // 3 distinct questions answered; question 0's most-recent attempt
     // is correct, question 1 correct, question 2 wrong → 2/3 right.

@@ -40,7 +40,7 @@ function testAuth(): RequestHandler {
       claims: {
         sub: `test-sub-${user_id}`,
         role: (typeof role === "string" ? role : "admin") as AuthContext["claims"]["role"],
-        apps: ["reading"],
+        apps: ["story-sleuth"],
       } as AuthContext["claims"],
     };
     next();
