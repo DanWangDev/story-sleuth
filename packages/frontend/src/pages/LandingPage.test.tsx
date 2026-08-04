@@ -67,9 +67,12 @@ describe("<LandingPage />", () => {
         if (url.includes("/api/auth/me")) {
           return new Response(
             JSON.stringify({
-              sub: "user-1",
-              role: "student",
-              apps: ["reading"],
+              success: true,
+              data: {
+                sub: "user-1",
+                role: "student",
+                apps: ["story-sleuth"],
+              },
             }),
             { status: 200 },
           );
@@ -116,7 +119,10 @@ describe("<LandingPage />", () => {
         const url = typeof input === "string" ? input : input.toString();
         if (url.includes("/api/auth/me")) {
           return new Response(
-            JSON.stringify({ sub: "u", role: "student", apps: ["reading"] }),
+            JSON.stringify({
+              success: true,
+              data: { sub: "u", role: "student", apps: ["story-sleuth"] },
+            }),
             { status: 200 },
           );
         }
