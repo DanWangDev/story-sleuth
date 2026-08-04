@@ -18,27 +18,20 @@ import { apiFetch } from "./client.js";
 
 export type LLMProvider = "qwen" | "openai" | "anthropic";
 
-export interface PublicProviderConfig {
-  provider: LLMProvider;
+export interface LlmConfigResponse {
+  provider: LLMProvider | null;
   model: string | null;
   base_url: string | null;
+  /** Last 4 chars of the stored key, or null if not set. */
   api_key_tail: string | null;
   updated_at: string | null;
 }
 
-export interface LlmConfigResponse {
-  active_provider: LLMProvider | null;
-  providers: PublicProviderConfig[];
-}
-
 export interface LlmConfigUpdate {
-  active_provider?: LLMProvider;
-  providers?: Array<{
-    provider: LLMProvider;
-    model?: string | null;
-    base_url?: string | null;
-    api_key?: string | null;
-  }>;
+  provider?: LLMProvider;
+  model?: string | null;
+  base_url?: string | null;
+  api_key?: string | null;
 }
 
 export async function getLlmConfig(): Promise<LlmConfigResponse> {

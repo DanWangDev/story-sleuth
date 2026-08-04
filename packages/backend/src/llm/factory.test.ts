@@ -37,25 +37,23 @@ d("LLMFactory", () => {
   });
 
   beforeEach(async () => {
-    // Clear LLM settings between tests.
-    for (const p of ["qwen", "openai", "anthropic"] as const) {
-      await settings.delete(LLM_SETTING_KEYS.api_key(p));
-      await settings.delete(LLM_SETTING_KEYS.model(p));
-      await settings.delete(LLM_SETTING_KEYS.base_url(p));
-    }
-    await settings.delete(LLM_SETTING_KEYS.active_provider);
+    // Clear global LLM settings between tests.
+    await settings.delete(LLM_SETTING_KEYS.provider);
+    await settings.delete(LLM_SETTING_KEYS.model);
+    await settings.delete(LLM_SETTING_KEYS.api_key);
+    await settings.delete(LLM_SETTING_KEYS.base_url);
   });
 
-  it("throws provider_unknown when no active provider is configured", async () => {
+  it("throws provider_unknown when no provider is configured", async () => {
     await expect(factory.buildClient()).rejects.toMatchObject({
       name: "LLMError",
       code: "provider_unknown",
     });
   });
 
-  it("throws provider_unknown when active_provider is not a valid value", async () => {
+  it("throws provider_unknown when provider is not a valid value", async () => {
     await settings.upsert({
-      key: LLM_SETTING_KEYS.active_provider,
+      key: LLM_SETTING_KEYS.provider,
       value: "bogus",
       is_secret: false,
       updated_by: adminId,
@@ -65,9 +63,9 @@ d("LLMFactory", () => {
     });
   });
 
-  it("throws invalid_api_key when the active provider has no api_key", async () => {
+  it("throws invalid_api_key when no api_key is configured", async () => {
     await settings.upsert({
-      key: LLM_SETTING_KEYS.active_provider,
+      key: LLM_SETTING_KEYS.provider,
       value: "qwen",
       is_secret: false,
       updated_by: adminId,
@@ -80,13 +78,13 @@ d("LLMFactory", () => {
 
   it("builds a QwenClient when provider=qwen and api_key is set", async () => {
     await settings.upsert({
-      key: LLM_SETTING_KEYS.active_provider,
+      key: LLM_SETTING_KEYS.provider,
       value: "qwen",
       is_secret: false,
       updated_by: adminId,
     });
     await settings.upsert({
-      key: LLM_SETTING_KEYS.api_key("qwen"),
+      key: LLM_SETTING_KEYS.api_key,
       value: "sk-q",
       is_secret: true,
       updated_by: adminId,
@@ -97,21 +95,21 @@ d("LLMFactory", () => {
     expect(client.model).toBe("qwen-plus");
   });
 
-  it("honours per-provider model override", async () => {
+  it("honours global model override", async () => {
     await settings.upsert({
-      key: LLM_SETTING_KEYS.active_provider,
+      key: LLM_SETTING_KEYS.provider,
       value: "qwen",
       is_secret: false,
       updated_by: adminId,
     });
     await settings.upsert({
-      key: LLM_SETTING_KEYS.api_key("qwen"),
+      key: LLM_SETTING_KEYS.api_key,
       value: "sk-q",
       is_secret: true,
       updated_by: adminId,
     });
     await settings.upsert({
-      key: LLM_SETTING_KEYS.model("qwen"),
+      key: LLM_SETTING_KEYS.model,
       value: "qwen-max",
       is_secret: false,
       updated_by: adminId,
@@ -122,13 +120,13 @@ d("LLMFactory", () => {
 
   it("builds an OpenAIClient when provider=openai", async () => {
     await settings.upsert({
-      key: LLM_SETTING_KEYS.active_provider,
+      key: LLM_SETTING_KEYS.provider,
       value: "openai",
       is_secret: false,
       updated_by: adminId,
     });
     await settings.upsert({
-      key: LLM_SETTING_KEYS.api_key("openai"),
+      key: LLM_SETTING_KEYS.api_key,
       value: "sk-o",
       is_secret: true,
       updated_by: adminId,
@@ -140,13 +138,13 @@ d("LLMFactory", () => {
 
   it("builds an AnthropicClient when provider=anthropic", async () => {
     await settings.upsert({
-      key: LLM_SETTING_KEYS.active_provider,
+      key: LLM_SETTING_KEYS.provider,
       value: "anthropic",
       is_secret: false,
       updated_by: adminId,
     });
     await settings.upsert({
-      key: LLM_SETTING_KEYS.api_key("anthropic"),
+      key: LLM_SETTING_KEYS.api_key,
       value: "sk-a",
       is_secret: true,
       updated_by: adminId,
@@ -159,13 +157,13 @@ d("LLMFactory", () => {
   it("re-reads settings on every buildClient call (no internal cache)", async () => {
     // Start on qwen.
     await settings.upsert({
-      key: LLM_SETTING_KEYS.active_provider,
+      key: LLM_SETTING_KEYS.provider,
       value: "qwen",
       is_secret: false,
       updated_by: adminId,
     });
     await settings.upsert({
-      key: LLM_SETTING_KEYS.api_key("qwen"),
+      key: LLM_SETTING_KEYS.api_key,
       value: "sk-q",
       is_secret: true,
       updated_by: adminId,
@@ -175,13 +173,13 @@ d("LLMFactory", () => {
 
     // Admin switches to openai without a server restart.
     await settings.upsert({
-      key: LLM_SETTING_KEYS.active_provider,
+      key: LLM_SETTING_KEYS.provider,
       value: "openai",
       is_secret: false,
       updated_by: adminId,
     });
     await settings.upsert({
-      key: LLM_SETTING_KEYS.api_key("openai"),
+      key: LLM_SETTING_KEYS.api_key,
       value: "sk-o",
       is_secret: true,
       updated_by: adminId,
