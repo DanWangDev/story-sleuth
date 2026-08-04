@@ -219,10 +219,8 @@ d("CoachService", () => {
     const spy = vi.spyOn(factory, "buildClient");
     spy.mockRestore();
     try {
-      for (const p of ["qwen", "openai", "anthropic"] as const) {
-        await settings.delete(LLM_SETTING_KEYS.api_key(p));
-      }
-      await settings.delete(LLM_SETTING_KEYS.active_provider);
+      await settings.delete(LLM_SETTING_KEYS.api_key);
+      await settings.delete(LLM_SETTING_KEYS.provider);
 
       const ctx = await setupEndedSessionWithAttempt();
       await expect(

@@ -11,38 +11,22 @@ interface Call {
 }
 
 const adminMe = {
-  sub: "admin-1",
-  role: "admin",
-  apps: ["reading"],
+  success: true,
+  data: {
+    sub: "admin-1",
+    role: "admin",
+    apps: ["story-sleuth"],
+  },
 };
 
 function stubLlmConfig() {
   const calls: Call[] = [];
   let config = {
-    active_provider: "qwen",
-    providers: [
-      {
-        provider: "qwen",
-        model: "qwen2.5-72b-instruct",
-        base_url: null,
-        api_key_tail: "****abcd",
-        updated_at: "2026-04-10T00:00:00.000Z",
-      },
-      {
-        provider: "openai",
-        model: null,
-        base_url: null,
-        api_key_tail: null,
-        updated_at: null,
-      },
-      {
-        provider: "anthropic",
-        model: null,
-        base_url: null,
-        api_key_tail: null,
-        updated_at: null,
-      },
-    ],
+    provider: "qwen",
+    model: "qwen2.5-72b-instruct",
+    base_url: null,
+    api_key_tail: "****abcd",
+    updated_at: "2026-04-10T00:00:00.000Z",
   };
 
   global.fetch = async (
@@ -60,31 +44,20 @@ function stubLlmConfig() {
     if (url.endsWith("/api/admin/settings/llm")) {
       if (method === "PUT" && body) {
         const b = body as {
-          active_provider?: string;
-          providers?: Array<{
-            provider: string;
-            model?: string;
-            api_key?: string;
-          }>;
+          provider?: string;
+          model?: string;
+          api_key?: string;
         };
-        if (b.active_provider) {
-          config = { ...config, active_provider: b.active_provider };
+        if (b.provider) {
+          config = { ...config, provider: b.provider };
         }
-        for (const p of b.providers ?? []) {
+        if (b.model !== undefined) {
+          config = { ...config, model: b.model };
+        }
+        if (typeof b.api_key === "string" && b.api_key.length > 0) {
           config = {
             ...config,
-            providers: config.providers.map((existing) =>
-              existing.provider === p.provider
-                ? {
-                    ...existing,
-                    model: p.model ?? existing.model,
-                    api_key_tail:
-                      typeof p.api_key === "string" && p.api_key.length > 0
-                        ? `****${p.api_key.slice(-4)}`
-                        : existing.api_key_tail,
-                  }
-                : existing,
-            ),
+            api_key_tail: `****${b.api_key.slice(-4)}`,
           };
         }
       }
@@ -104,75 +77,75 @@ describe("<LlmSettingsPage />", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders one card per provider with masked key tail", async () => {
+  it("renders a single form with provider dropdown and masked key tail", async () => {
     stubLlmConfig();
     renderPage(<LlmSettingsPage />);
     expect(await screen.findByText(/LLM settings/i)).toBeInTheDocument();
     expect(
-      await screen.findByRole("heading", { name: /qwen/i }),
+      await screen.findByRole("heading", { name: /LLM configuration/i }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /openai/i })).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: /anthropic/i }),
-    ).toBeInTheDocument();
+    // Provider dropdown is present.
+    expect(screen.getByRole("combobox")).toBeInTheDocument();
+    // Masked key tail is shown.
     expect(screen.getByText(/\*\*\*\*abcd/)).toBeInTheDocument();
+    // Model input is pre-filled.
+    const modelInput = screen.getByPlaceholderText(
+      /qwen2.5-72b-instruct/,
+    ) as HTMLInputElement;
+    expect(modelInput.value).toBe("qwen2.5-72b-instruct");
   });
 
-  it("saves a new api key via PUT with only the touched provider", async () => {
+  it("saves updated fields via flat PUT", async () => {
     const { calls } = stubLlmConfig();
     renderPage(<LlmSettingsPage />);
 
-    await screen.findByRole("heading", { name: /qwen/i });
-
-    const qwenCard = screen
-      .getByRole("heading", { name: /qwen/i })
-      .closest("section")!;
-    expect(qwenCard).toBeTruthy();
+    await screen.findByRole("heading", { name: /LLM configuration/i });
 
     const user = userEvent.setup();
-    const keyInputs = qwenCard.querySelectorAll('input[type="password"]');
-    await user.type(keyInputs[0] as HTMLInputElement, "sk-new-key-9999");
-    const saveBtns = Array.from(
-      qwenCard.querySelectorAll("button"),
-    ).filter((b) => b.textContent?.match(/save/i));
-    await user.click(saveBtns[0] as HTMLButtonElement);
+    // Type a new API key.
+    const keyInput = screen.getByPlaceholderText(/Paste a new key/);
+    await user.type(keyInput, "sk-new-key-9999");
+    // Click the single Save button.
+    const saveBtn = screen.getByRole("button", { name: /^Save$/ });
+    await user.click(saveBtn);
 
-    await waitFor(() => expect(screen.getByText(/^Saved\.$/)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/^Saved\.$/)).toBeInTheDocument(),
+    );
 
     const putCall = calls.find(
       (c) => c.method === "PUT" && c.url.endsWith("/api/admin/settings/llm"),
     );
     expect(putCall).toBeTruthy();
     const sent = putCall!.body as {
-      active_provider?: string;
-      providers: Array<{ provider: string; api_key?: string }>;
+      provider?: string;
+      model?: string;
+      api_key?: string;
     };
-    expect(sent.active_provider).toBeUndefined();
-    expect(sent.providers).toHaveLength(1);
-    expect(sent.providers[0].provider).toBe("qwen");
-    expect(sent.providers[0].api_key).toBe("sk-new-key-9999");
+    expect(sent.api_key).toBe("sk-new-key-9999");
   });
 
-  it("switches active provider via the radio and sends only active_provider", async () => {
+  it("sends provider when dropdown changes", async () => {
     const { calls } = stubLlmConfig();
     renderPage(<LlmSettingsPage />);
-    await screen.findByRole("heading", { name: /openai/i });
+    await screen.findByRole("heading", { name: /LLM configuration/i });
+
     const user = userEvent.setup();
-    const openaiRadio = screen.getByRole("radio", {
-      name: /use openai as active provider/i,
-    });
-    await user.click(openaiRadio);
-    await waitFor(() => {
-      const put = calls.find(
-        (c) => c.method === "PUT" && c.url.endsWith("/api/admin/settings/llm"),
-      );
-      expect(put).toBeTruthy();
-      const sent = put!.body as {
-        active_provider: string;
-        providers?: unknown[];
-      };
-      expect(sent.active_provider).toBe("openai");
-      expect(sent.providers).toBeUndefined();
-    });
+    // Change provider to openai.
+    const select = screen.getByRole("combobox");
+    await user.selectOptions(select, "openai");
+    // Click Save.
+    await user.click(screen.getByRole("button", { name: /^Save$/ }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/^Saved\.$/)).toBeInTheDocument(),
+    );
+
+    const putCall = calls.find(
+      (c) => c.method === "PUT" && c.url.endsWith("/api/admin/settings/llm"),
+    );
+    expect(putCall).toBeTruthy();
+    const sent = putCall!.body as { provider: string };
+    expect(sent.provider).toBe("openai");
   });
 });

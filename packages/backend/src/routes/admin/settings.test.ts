@@ -84,12 +84,10 @@ d("Admin /api/admin/settings/llm", () => {
   });
 
   beforeEach(async () => {
-    for (const p of ["qwen", "openai", "anthropic"] as const) {
-      await settings.delete(LLM_SETTING_KEYS.api_key(p));
-      await settings.delete(LLM_SETTING_KEYS.model(p));
-      await settings.delete(LLM_SETTING_KEYS.base_url(p));
-    }
-    await settings.delete(LLM_SETTING_KEYS.active_provider);
+    await settings.delete(LLM_SETTING_KEYS.provider);
+    await settings.delete(LLM_SETTING_KEYS.model);
+    await settings.delete(LLM_SETTING_KEYS.api_key);
+    await settings.delete(LLM_SETTING_KEYS.base_url);
   });
 
   it("401 without auth", async () => {
@@ -106,44 +104,36 @@ d("Admin /api/admin/settings/llm", () => {
     expect(res.body.error).toBe("admin_only");
   });
 
-  it("GET returns null active_provider and no tails when nothing is set", async () => {
+  it("GET returns nulls when nothing is set", async () => {
     const res = await request(app)
       .get("/api/admin/settings/llm")
       .set("x-test-user-id", String(adminId));
     expect(res.status).toBe(200);
-    expect(res.body.active_provider).toBeNull();
-    expect(res.body.providers).toHaveLength(3);
-    for (const p of res.body.providers) {
-      expect(p.api_key_tail).toBeNull();
-      expect(p.model).toBeNull();
-    }
+    expect(res.body.provider).toBeNull();
+    expect(res.body.model).toBeNull();
+    expect(res.body.base_url).toBeNull();
+    expect(res.body.api_key_tail).toBeNull();
   });
 
-  it("PUT sets active_provider + qwen api_key; GET reveals only the last-4 tail", async () => {
+  it("PUT sets provider + api_key; GET reveals only the last-4 tail", async () => {
     const put = await request(app)
       .put("/api/admin/settings/llm")
       .set("x-test-user-id", String(adminId))
       .send({
-        active_provider: "qwen",
-        providers: [
-          { provider: "qwen", api_key: "sk-qwen-topsecret-1234" },
-        ],
+        provider: "qwen",
+        api_key: "sk-qwen-topsecret-1234",
       });
     expect(put.status).toBe(200);
-    expect(put.body.active_provider).toBe("qwen");
-
-    const qwen = put.body.providers.find(
-      (p: { provider: string }) => p.provider === "qwen",
-    );
-    expect(qwen.api_key_tail).toBe("****1234");
-    expect(qwen.api_key_tail).not.toContain("topsecret");
+    expect(put.body.provider).toBe("qwen");
+    expect(put.body.api_key_tail).toBe("****1234");
+    expect(put.body.api_key_tail).not.toContain("topsecret");
   });
 
-  it("PUT validates active_provider as one of the known set", async () => {
+  it("PUT validates provider as one of the known set", async () => {
     const res = await request(app)
       .put("/api/admin/settings/llm")
       .set("x-test-user-id", String(adminId))
-      .send({ active_provider: "bogus" });
+      .send({ provider: "bogus" });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("invalid_request");
   });
@@ -154,42 +144,30 @@ d("Admin /api/admin/settings/llm", () => {
       .put("/api/admin/settings/llm")
       .set("x-test-user-id", String(adminId))
       .send({
-        providers: [
-          {
-            provider: "qwen",
-            api_key: "sk-qwen-1111",
-            model: "qwen-plus",
-          },
-        ],
+        provider: "qwen",
+        api_key: "sk-qwen-1111",
+        model: "qwen-plus",
       });
 
     // Update just the model
     const res = await request(app)
       .put("/api/admin/settings/llm")
       .set("x-test-user-id", String(adminId))
-      .send({
-        providers: [{ provider: "qwen", model: "qwen-max" }],
-      });
+      .send({ model: "qwen-max" });
 
-    const qwen = res.body.providers.find(
-      (p: { provider: string }) => p.provider === "qwen",
-    );
-    expect(qwen.model).toBe("qwen-max");
-    expect(qwen.api_key_tail).toBe("****1111"); // unchanged
+    expect(res.body.provider).toBe("qwen");
+    expect(res.body.model).toBe("qwen-max");
+    expect(res.body.api_key_tail).toBe("****1111"); // unchanged
   });
 
   it("PUT persists encrypted — raw value in DB doesn't contain the plaintext key", async () => {
     await request(app)
       .put("/api/admin/settings/llm")
       .set("x-test-user-id", String(adminId))
-      .send({
-        providers: [
-          { provider: "openai", api_key: "sk-openai-plaintextcheck" },
-        ],
-      });
+      .send({ provider: "openai", api_key: "sk-openai-plaintextcheck" });
 
     const raw = await sql<{ value: string }[]>`
-      SELECT value FROM admin_settings WHERE key = 'llm.openai.api_key'
+      SELECT value FROM admin_settings WHERE key = 'llm.api_key'
     `;
     expect(raw[0]?.value).not.toContain("plaintextcheck");
     expect(raw[0]?.value).not.toContain("sk-openai");
@@ -199,9 +177,9 @@ d("Admin /api/admin/settings/llm", () => {
     await request(app)
       .put("/api/admin/settings/llm")
       .set("x-test-user-id", String(adminId))
-      .send({ active_provider: "openai" });
+      .send({ provider: "openai" });
 
-    const stored = await settings.get(LLM_SETTING_KEYS.active_provider);
+    const stored = await settings.get(LLM_SETTING_KEYS.provider);
     expect(stored?.updated_by).toBe(adminId);
   });
 });

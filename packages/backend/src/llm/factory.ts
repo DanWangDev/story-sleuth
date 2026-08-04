@@ -5,14 +5,14 @@ import { AnthropicClient } from "./providers/anthropic.js";
 import type { AdminSettingsRepository } from "../repositories/interfaces/admin-settings-repository.js";
 
 /**
- * Admin-settings key conventions. Model and api_key are per-provider so
- * switching providers doesn't discard the other's config.
+ * Admin-settings key conventions. One global LLM config — switching
+ * providers replaces the old credentials (no per-provider storage).
  */
 export const LLM_SETTING_KEYS = {
-  active_provider: "llm.active_provider",
-  model: (p: LLMProvider) => `llm.${p}.model`,
-  api_key: (p: LLMProvider) => `llm.${p}.api_key`,
-  base_url: (p: LLMProvider) => `llm.${p}.base_url`,
+  provider: "llm.provider",
+  model: "llm.model",
+  api_key: "llm.api_key",
+  base_url: "llm.base_url",
 } as const;
 
 export function isValidProvider(x: string): x is LLMProvider {
@@ -33,30 +33,31 @@ export class LLMFactory {
   constructor(private readonly settings: AdminSettingsRepository) {}
 
   async buildClient(): Promise<ILLMClient> {
-    const active = await this.settings.get(LLM_SETTING_KEYS.active_provider);
-    if (!active || !isValidProvider(active.value)) {
+    const keys = [
+      LLM_SETTING_KEYS.provider,
+      LLM_SETTING_KEYS.model,
+      LLM_SETTING_KEYS.api_key,
+      LLM_SETTING_KEYS.base_url,
+    ];
+    const bundle = await this.settings.getMany(keys);
+
+    const provider = bundle.get(LLM_SETTING_KEYS.provider)?.value;
+    if (!provider || !isValidProvider(provider)) {
       throw new LLMError(
-        "no active LLM provider configured — set llm.active_provider in admin settings",
+        "no LLM provider configured — set llm.provider in admin settings",
         "provider_unknown",
         "unknown",
         false,
       );
     }
-    const provider = active.value;
 
-    const needed = [
-      LLM_SETTING_KEYS.api_key(provider),
-      LLM_SETTING_KEYS.model(provider),
-      LLM_SETTING_KEYS.base_url(provider),
-    ];
-    const bundle = await this.settings.getMany(needed);
-    const api_key = bundle.get(LLM_SETTING_KEYS.api_key(provider))?.value;
-    const model = bundle.get(LLM_SETTING_KEYS.model(provider))?.value;
-    const base_url = bundle.get(LLM_SETTING_KEYS.base_url(provider))?.value;
+    const api_key = bundle.get(LLM_SETTING_KEYS.api_key)?.value;
+    const model = bundle.get(LLM_SETTING_KEYS.model)?.value;
+    const base_url = bundle.get(LLM_SETTING_KEYS.base_url)?.value;
 
     if (!api_key) {
       throw new LLMError(
-        `provider ${provider} is active but has no api_key configured`,
+        `no api_key configured — paste one in admin settings`,
         "invalid_api_key",
         provider,
         false,
