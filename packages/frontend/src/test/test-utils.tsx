@@ -85,10 +85,13 @@ export function mockAuthenticatedAs(user: {
       respond: () =>
         new Response(
           JSON.stringify({
-            sub: user.sub,
-            role: user.role ?? "student",
-            display_name: user.display_name,
-            apps: user.apps ?? ["reading"],
+            success: true,
+            data: {
+              sub: user.sub,
+              role: user.role ?? "student",
+              display_name: user.display_name,
+              apps: user.apps ?? ["story-sleuth"],
+            },
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         ),

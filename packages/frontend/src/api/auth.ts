@@ -19,7 +19,10 @@ export interface CurrentUser {
  */
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   try {
-    return await apiFetch<CurrentUser>("/api/auth/me");
+    const result = await apiFetch<{ success: boolean; data: CurrentUser }>(
+      "/api/auth/me",
+    );
+    return result.data;
   } catch (err) {
     if (err instanceof ApiError && err.is_unauthorized) return null;
     throw err;
