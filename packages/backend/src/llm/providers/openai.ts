@@ -63,10 +63,21 @@ export class OpenAIClient implements ILLMClient {
       signal: options.signal,
     });
 
-    const content = data.choices[0]?.message.content;
-    if (typeof content !== "string" || content.length === 0) {
+    const choice = data.choices[0];
+    if (!choice) {
       throw new LLMError(
-        `${this.provider} returned an empty completion`,
+        `${this.provider} returned no choices — check the model name is valid for this provider`,
+        "malformed_response",
+        this.provider,
+        false,
+      );
+    }
+    const content = choice.message?.content;
+    if (typeof content !== "string" || content.length === 0) {
+      // Include the raw choice in the error so the admin can debug.
+      const preview = JSON.stringify(choice).slice(0, 200);
+      throw new LLMError(
+        `${this.provider} returned an empty completion. Raw response: ${preview}`,
         "malformed_response",
         this.provider,
         false,
