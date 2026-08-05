@@ -118,7 +118,7 @@ export function LlmSettingsPage(): React.ReactElement {
         provider,
         model: model.trim() || undefined,
         base_url: baseUrl.trim() || undefined,
-        api_key: newKey.trim() || "",
+        api_key: newKey.trim() || undefined,
       });
       setTestResult(
         r.success

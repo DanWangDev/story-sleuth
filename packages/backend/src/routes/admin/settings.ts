@@ -39,7 +39,8 @@ const TEST_BODY = z.object({
   provider: z.string().min(1),
   model: z.string().min(1).max(200).optional().nullable(),
   base_url: z.string().url().optional().nullable(),
-  api_key: z.string().min(1).max(500),
+  /** If omitted, falls back to the saved API key. */
+  api_key: z.string().max(500).optional().nullable(),
 });
 
 function mask(value: string): string {
@@ -279,13 +280,27 @@ export function createAdminSettingsRouter(
         return;
       }
 
+      // Fall back to the saved API key if the admin didn't type a new one.
+      const api_key =
+        body.api_key && body.api_key.trim().length > 0
+          ? body.api_key
+          : (await settings.get(LLM_SETTING_KEYS.api_key))?.value;
+
+      if (!api_key) {
+        res.status(400).json({
+          error: "invalid_request",
+          message: "No API key provided and none saved.",
+        });
+        return;
+      }
+
       // Build a client directly from the form values — no DB writes,
       // no race condition with saved settings.
       const factory = new LLMFactory(settings);
       try {
         const client = await factory.buildClientFromConfig({
           provider: body.provider,
-          api_key: body.api_key,
+          api_key,
           model: body.model ?? undefined,
           base_url: body.base_url ?? undefined,
         });
