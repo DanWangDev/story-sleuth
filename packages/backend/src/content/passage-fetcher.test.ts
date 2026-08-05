@@ -56,6 +56,25 @@ describe("PassageFetcher.extract", () => {
     expect(out.word_count).toBeLessThan(200);
   });
 
+  it("matches phrases that span a Gutenberg line break (\\n)", () => {
+    // The end_phrase crosses from line 40 to line 41 in the fixture:
+    //   "...said \"Bother!\" and \"O blow!\" and also \"Hang\n"
+    //   "spring-cleaning!\" and bolted out of the house..."
+    // With \n collapsed to space, the phrase should match.
+    const manifest: PassageManifest = {
+      ...baseManifest,
+      extract: {
+        start_phrase: "The Mole had been working very hard",
+        end_phrase:
+          'and also "Hang spring-cleaning!" and bolted out of the house without even waiting to put on his coat.',
+        approximate_words: 60,
+      },
+    };
+    const out = fetcher.extract(SAMPLE_BODY, manifest);
+    expect(out.body).toMatch(/The Mole/);
+    expect(out.body).toMatch(/without even waiting to put on his coat\.$/);
+  });
+
   it("folds Gutenberg-style soft-wraps into paragraph-friendly whitespace", () => {
     const out = fetcher.extract(SAMPLE_BODY, baseManifest);
     // Single-newline folded to space; double-newline (paragraphs)

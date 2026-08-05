@@ -81,27 +81,40 @@ export class PassageFetcher {
   extract(raw: string, manifest: PassageManifest): FetchedPassage {
     const { start_phrase, end_phrase, approximate_words } = manifest.extract;
 
-    const startIdx = raw.indexOf(start_phrase);
+    // Gutenberg wraps text at ~70 chars with \n line breaks. Phrases that
+    // span a line break won't match via raw indexOf. Collapse \n → space
+    // (1:1 replacement, so positions stay aligned with the original).
+    const flattened = raw.replace(/\n/g, " ");
+    const startFlat = start_phrase.replace(/\n/g, " ");
+    const endFlat = end_phrase.replace(/\n/g, " ");
+
+    const startIdx = flattened.indexOf(startFlat);
     if (startIdx === -1) {
+      const snippet = raw.slice(0, 200).replace(/\n/g, "\\n");
       throw new FetchError(
-        `start_phrase not found in ${manifest.source_url}: "${start_phrase.slice(0, 60)}..."`,
+        `start_phrase not found in ${manifest.source_url}: "${start_phrase.slice(0, 60)}..." (text begins: "${snippet}")`,
         "start_phrase_not_found",
         manifest.id,
       );
     }
 
     // Look for end_phrase AFTER startIdx so we don't match an earlier occurrence.
-    const searchFrom = startIdx + start_phrase.length;
-    const endIdx = raw.indexOf(end_phrase, searchFrom);
+    const searchFrom = startIdx + startFlat.length;
+    const endIdx = flattened.indexOf(endFlat, searchFrom);
     if (endIdx === -1) {
+      const context = flattened
+        .slice(startIdx, startIdx + 200)
+        .replace(/\s+/g, " ")
+        .trim();
       throw new FetchError(
-        `end_phrase not found after start_phrase in ${manifest.source_url}`,
+        `end_phrase not found after start_phrase in ${manifest.source_url}: "${end_phrase.slice(0, 60)}..." (context after start: "${context.slice(0, 120)}...")`,
         "end_phrase_not_found",
         manifest.id,
       );
     }
 
-    const sliceEnd = endIdx + end_phrase.length;
+    const sliceEnd = endIdx + endFlat.length;
+    // Slice from the original raw text — positions are 1:1 with flattened.
     const body = raw.slice(startIdx, sliceEnd);
     const cleaned = normaliseWhitespace(body);
     const word_count = countWords(cleaned);

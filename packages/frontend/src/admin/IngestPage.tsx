@@ -233,12 +233,27 @@ function JobsTable({ jobs }: { jobs: IngestJob[] }): React.ReactElement {
               <Td>{new Date(j.started_at).toLocaleString()}</Td>
               <Td>
                 {j.error_log ? (
-                  <span
-                    title={j.error_log}
-                    style={{ color: "var(--color-ink-muted)" }}
-                  >
-                    {truncate(j.error_log, 80)}
-                  </span>
+                  <div title={j.error_log}>
+                    <span
+                      className="inline-block px-1.5 py-0.5 rounded text-xs font-mono font-semibold mb-1"
+                      style={{
+                        background: "#F5E3DA",
+                        color: "var(--color-error)",
+                      }}
+                    >
+                      {extractErrorCode(j.error_log)}
+                    </span>
+                    <div
+                      className="text-xs font-mono leading-relaxed"
+                      style={{
+                        color: "var(--color-ink-muted)",
+                        maxWidth: "420px",
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {j.error_log}
+                    </div>
+                  </div>
                 ) : (
                   <span style={{ color: "var(--color-ink-muted)" }}>—</span>
                 )}
@@ -292,6 +307,17 @@ function Td({ children }: { children: React.ReactNode }): React.ReactElement {
   );
 }
 
-function truncate(s: string, n: number): string {
-  return s.length > n ? `${s.slice(0, n - 1)}…` : s;
+/**
+ * Pull the error code out of a PipelineError / FetchError message.
+ *   "PipelineError: passage fetch failed [end_phrase_not_found]: ..."
+ *   → "end_phrase_not_found"
+ *
+ * If no bracketed code is found, returns the first word after the colon.
+ */
+function extractErrorCode(log: string): string {
+  const m = log.match(/\[(\w+)\]/);
+  if (m) return m[1];
+  // Fallback: grab the error type before the first detail.
+  const parts = log.split(":");
+  return parts.length >= 2 ? parts[0].trim() : "error";
 }
