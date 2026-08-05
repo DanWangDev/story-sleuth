@@ -8,7 +8,6 @@ import { PostgresAdminSettingsRepository } from "../repositories/postgres/postgr
 import { PostgresUserMappingRepository } from "../repositories/postgres/postgres-user-mapping-repository.js";
 import { LLMFactory, LLM_SETTING_KEYS } from "./factory.js";
 import { LLMError } from "./types.js";
-import { QwenClient } from "./providers/qwen.js";
 import { OpenAIClient } from "./providers/openai.js";
 import { AnthropicClient } from "./providers/anthropic.js";
 
@@ -37,11 +36,11 @@ d("LLMFactory", () => {
   });
 
   beforeEach(async () => {
-    // Clear global LLM settings between tests.
     await settings.delete(LLM_SETTING_KEYS.provider);
     await settings.delete(LLM_SETTING_KEYS.model);
     await settings.delete(LLM_SETTING_KEYS.api_key);
     await settings.delete(LLM_SETTING_KEYS.base_url);
+    await settings.delete(LLM_SETTING_KEYS.providers);
   });
 
   it("throws provider_unknown when no provider is configured", async () => {
@@ -51,7 +50,7 @@ d("LLMFactory", () => {
     });
   });
 
-  it("throws provider_unknown when provider is not a valid value", async () => {
+  it("throws provider_unknown when provider is not valid", async () => {
     await settings.upsert({
       key: LLM_SETTING_KEYS.provider,
       value: "bogus",
@@ -76,7 +75,7 @@ d("LLMFactory", () => {
     expect(err.provider).toBe("qwen");
   });
 
-  it("builds a QwenClient when provider=qwen and api_key is set", async () => {
+  it("builds an OpenAIClient for qwen (uses defaults)", async () => {
     await settings.upsert({
       key: LLM_SETTING_KEYS.provider,
       value: "qwen",
@@ -90,12 +89,12 @@ d("LLMFactory", () => {
       updated_by: adminId,
     });
     const client = await factory.buildClient();
-    expect(client).toBeInstanceOf(QwenClient);
+    expect(client).toBeInstanceOf(OpenAIClient);
     expect(client.provider).toBe("qwen");
-    expect(client.model).toBe("qwen-plus");
+    expect(client.model).toBe("qwen-plus"); // from DEFAULTS
   });
 
-  it("honours global model override", async () => {
+  it("honours global model override for qwen", async () => {
     await settings.upsert({
       key: LLM_SETTING_KEYS.provider,
       value: "qwen",
@@ -118,7 +117,7 @@ d("LLMFactory", () => {
     expect(client.model).toBe("qwen-max");
   });
 
-  it("builds an OpenAIClient when provider=openai", async () => {
+  it("builds an OpenAIClient for openai", async () => {
     await settings.upsert({
       key: LLM_SETTING_KEYS.provider,
       value: "openai",
@@ -134,9 +133,10 @@ d("LLMFactory", () => {
     const client = await factory.buildClient();
     expect(client).toBeInstanceOf(OpenAIClient);
     expect(client.provider).toBe("openai");
+    expect(client.model).toBe("gpt-4o-mini"); // from DEFAULTS
   });
 
-  it("builds an AnthropicClient when provider=anthropic", async () => {
+  it("builds an AnthropicClient for anthropic", async () => {
     await settings.upsert({
       key: LLM_SETTING_KEYS.provider,
       value: "anthropic",
@@ -154,7 +154,7 @@ d("LLMFactory", () => {
     expect(client.provider).toBe("anthropic");
   });
 
-  it("builds an OpenAIClient when provider=deepseek", async () => {
+  it("builds an OpenAIClient for deepseek", async () => {
     await settings.upsert({
       key: LLM_SETTING_KEYS.provider,
       value: "deepseek",
@@ -172,7 +172,7 @@ d("LLMFactory", () => {
     expect(client.provider).toBe("deepseek");
   });
 
-  it("builds an OpenAIClient when provider=kimi", async () => {
+  it("builds an OpenAIClient for kimi", async () => {
     await settings.upsert({
       key: LLM_SETTING_KEYS.provider,
       value: "kimi",
@@ -190,7 +190,7 @@ d("LLMFactory", () => {
     expect(client.provider).toBe("kimi");
   });
 
-  it("builds an OpenAIClient when provider=glm", async () => {
+  it("builds an OpenAIClient for glm", async () => {
     await settings.upsert({
       key: LLM_SETTING_KEYS.provider,
       value: "glm",
@@ -209,7 +209,6 @@ d("LLMFactory", () => {
   });
 
   it("re-reads settings on every buildClient call (no internal cache)", async () => {
-    // Start on qwen.
     await settings.upsert({
       key: LLM_SETTING_KEYS.provider,
       value: "qwen",
@@ -225,7 +224,6 @@ d("LLMFactory", () => {
     const first = await factory.buildClient();
     expect(first.provider).toBe("qwen");
 
-    // Admin switches to openai without a server restart.
     await settings.upsert({
       key: LLM_SETTING_KEYS.provider,
       value: "openai",
