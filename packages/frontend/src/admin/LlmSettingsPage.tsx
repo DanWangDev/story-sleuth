@@ -124,7 +124,9 @@ export function LlmSettingsPage(): React.ReactElement {
         r.success
           ? {
               success: true,
-              message: `Connected to ${r.model} in ${r.latency_ms}ms`,
+              message:
+                `Connected to ${r.model} in ${r.latency_ms}ms` +
+                (r.preview ? ` — "${r.preview}"` : ""),
             }
           : { success: false, message: r.error ?? "Connection failed" },
       );

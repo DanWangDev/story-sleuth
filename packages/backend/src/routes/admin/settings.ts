@@ -279,107 +279,39 @@ export function createAdminSettingsRouter(
         return;
       }
 
-      // Build a temporary client from the provided values (don't save).
+      // Build a client directly from the form values — no DB writes,
+      // no race condition with saved settings.
       const factory = new LLMFactory(settings);
       try {
-        // Temporarily insert the test settings so buildClient() can read them.
-        // We'll restore the originals afterward.
-        const origProvider = await settings.get(LLM_SETTING_KEYS.provider);
-        const origModel = await settings.get(LLM_SETTING_KEYS.model);
-        const origBaseUrl = await settings.get(LLM_SETTING_KEYS.base_url);
-        const origApiKey = await settings.get(LLM_SETTING_KEYS.api_key);
+        const client = await factory.buildClientFromConfig({
+          provider: body.provider,
+          api_key: body.api_key,
+          model: body.model ?? undefined,
+          base_url: body.base_url ?? undefined,
+        });
 
-        const testAdminId = req.auth?.user_id ?? 0;
+        const started = Date.now();
+        const result = await client.generate({
+          user: "Say hello in one short sentence.",
+          max_tokens: 32,
+        });
+        const latency_ms = Date.now() - started;
 
-        try {
-          await settings.upsert({
-            key: LLM_SETTING_KEYS.provider,
-            value: body.provider,
-            is_secret: false,
-            updated_by: testAdminId,
-          });
-          if (body.model != null) {
-            await settings.upsert({
-              key: LLM_SETTING_KEYS.model,
-              value: body.model,
-              is_secret: false,
-              updated_by: testAdminId,
-            });
-          } else {
-            await settings.delete(LLM_SETTING_KEYS.model);
-          }
-          if (body.base_url != null) {
-            await settings.upsert({
-              key: LLM_SETTING_KEYS.base_url,
-              value: body.base_url,
-              is_secret: false,
-              updated_by: testAdminId,
-            });
-          } else {
-            await settings.delete(LLM_SETTING_KEYS.base_url);
-          }
-          await settings.upsert({
-            key: LLM_SETTING_KEYS.api_key,
-            value: body.api_key,
-            is_secret: true,
-            updated_by: testAdminId,
-          });
-
-          const client = await factory.buildClient();
-          const started = Date.now();
-          const result = await client.generate({
-            user: "Respond with exactly: ok",
-            max_tokens: 4,
-          });
-          const latency_ms = Date.now() - started;
-
+        // Verify the response contains actual text.
+        if (!result.text || result.text.trim().length === 0) {
           res.json({
-            success: true,
-            model: result.model,
-            latency_ms,
+            success: false,
+            error: "Provider returned an empty response — check the model name.",
           });
-        } finally {
-          // Restore original settings (or clean up test values).
-          const restore = async (
-            key: string,
-            orig: { value: string; is_secret: boolean } | null,
-          ) => {
-            if (orig) {
-              await settings.upsert({
-                key,
-                value: orig.value,
-                is_secret: orig.is_secret,
-                updated_by: testAdminId,
-              });
-            } else {
-              await settings.delete(key);
-            }
-          };
-          await restore(
-            LLM_SETTING_KEYS.provider,
-            origProvider
-              ? { value: origProvider.value, is_secret: origProvider.is_secret }
-              : null,
-          );
-          await restore(
-            LLM_SETTING_KEYS.model,
-            origModel
-              ? { value: origModel.value, is_secret: origModel.is_secret }
-              : null,
-          );
-          await restore(
-            LLM_SETTING_KEYS.base_url,
-            origBaseUrl
-              ? { value: origBaseUrl.value, is_secret: origBaseUrl.is_secret }
-              : null,
-          );
-          await restore(
-            LLM_SETTING_KEYS.api_key,
-            origApiKey
-              ? { value: origApiKey.value, is_secret: origApiKey.is_secret }
-              : null,
-          );
+          return;
         }
+
+        res.json({
+          success: true,
+          model: result.model,
+          latency_ms,
+          preview: result.text.slice(0, 100),
+        });
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Connection test failed";

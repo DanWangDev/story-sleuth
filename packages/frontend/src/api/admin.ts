@@ -42,6 +42,8 @@ export interface TestConnectionResult {
   success: boolean;
   model?: string;
   latency_ms?: number;
+  /** First 100 chars of the model's actual response (success case). */
+  preview?: string;
   error?: string;
 }
 

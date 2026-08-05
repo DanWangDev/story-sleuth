@@ -74,6 +74,13 @@ async function loadProviders(
   }
 }
 
+export interface ClientConfig {
+  provider: string;
+  model?: string;
+  base_url?: string;
+  api_key: string;
+}
+
 /**
  * Builds an ILLMClient from admin-configured settings. Re-reads every
  * call so a config change in the admin UI takes effect immediately.
@@ -115,7 +122,38 @@ export class LLMFactory {
       );
     }
 
-    // Look up the provider definition to determine client type.
+    return this.buildClientFromConfig({ provider, api_key, model, base_url });
+  }
+
+  /**
+   * Build a client directly from explicit config values — no DB reads.
+   * Used by the test-connection endpoint so it doesn't need to
+   * temporarily overwrite the stored settings.
+   */
+  async buildClientFromConfig(
+    config: ClientConfig,
+  ): Promise<ILLMClient> {
+    const { provider, api_key, model, base_url } = config;
+
+    const providers = await loadProviders(this.settings);
+    if (!isValidProvider(provider, providers)) {
+      throw new LLMError(
+        `unknown provider: ${provider}`,
+        "provider_unknown",
+        "unknown",
+        false,
+      );
+    }
+
+    if (!api_key) {
+      throw new LLMError(
+        "no api_key provided",
+        "invalid_api_key",
+        provider,
+        false,
+      );
+    }
+
     const def = providers.find((p) => p.id === provider);
     const api_type = def?.api_type ?? "openai-compatible";
 
@@ -123,7 +161,6 @@ export class LLMFactory {
       return new AnthropicClient({ api_key, model, base_url });
     }
 
-    // Everything else is OpenAI-compatible.
     const defaults = DEFAULTS[provider];
     return new OpenAIClient({
       provider: provider as LLMProvider,
