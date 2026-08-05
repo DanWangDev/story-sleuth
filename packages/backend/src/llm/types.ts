@@ -14,7 +14,7 @@
  * switch. Deliberately narrow so a typo in the admin UI can't silently
  * fall through.
  */
-export const LLM_PROVIDERS = ["qwen", "openai", "anthropic"] as const;
+export const LLM_PROVIDERS = ["qwen", "openai", "anthropic", "deepseek", "kimi", "glm"] as const;
 export type LLMProvider = (typeof LLM_PROVIDERS)[number];
 
 export interface GenerateOptions {

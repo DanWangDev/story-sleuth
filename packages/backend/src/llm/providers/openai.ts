@@ -3,6 +3,7 @@ import {
   type GenerateOptions,
   type GenerateResult,
   type ILLMClient,
+  type LLMProvider,
 } from "../types.js";
 import { postJson } from "./http-json-client.js";
 
@@ -21,19 +22,22 @@ interface OpenAIChatResponse {
 }
 
 export interface OpenAIClientConfig {
+  /** Which provider this instance represents in error messages and the provider property. */
+  provider: LLMProvider;
   api_key: string;
-  /** Default "gpt-4o-mini" — inexpensive, solid on instruction-following. */
+  /** Default: "gpt-4o-mini". Admin can override per provider. */
   model?: string;
-  /** Override for Azure OpenAI or gateways. */
+  /** Default: "https://api.openai.com/v1". Admin can override for gateways/alternate endpoints. */
   base_url?: string;
 }
 
 export class OpenAIClient implements ILLMClient {
-  readonly provider = "openai" as const;
+  readonly provider: LLMProvider;
   readonly model: string;
   private readonly base_url: string;
 
   constructor(private readonly config: OpenAIClientConfig) {
+    this.provider = config.provider;
     this.model = config.model ?? "gpt-4o-mini";
     this.base_url = config.base_url ?? "https://api.openai.com/v1";
   }
@@ -55,16 +59,16 @@ export class OpenAIClient implements ILLMClient {
       url: `${this.base_url}/chat/completions`,
       headers: { Authorization: `Bearer ${this.config.api_key}` },
       body,
-      provider: "openai",
+      provider: this.provider,
       signal: options.signal,
     });
 
     const content = data.choices[0]?.message.content;
     if (typeof content !== "string" || content.length === 0) {
       throw new LLMError(
-        "openai returned an empty completion",
+        `${this.provider} returned an empty completion`,
         "malformed_response",
-        "openai",
+        this.provider,
         false,
       );
     }
