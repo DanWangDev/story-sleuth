@@ -81,26 +81,33 @@ export class PassageFetcher {
   extract(raw: string, manifest: PassageManifest): FetchedPassage {
     const { start_phrase, end_phrase, approximate_words } = manifest.extract;
 
-    // Gutenberg wraps text at ~70 chars with \n line breaks. Phrases that
-    // span a line break won't match via raw indexOf. Collapse \n → space
-    // (1:1 replacement, so positions stay aligned with the original).
+    // Gutenberg has two quirks that break exact phrase matching:
+    // 1. Text is line-wrapped at ~70 chars with \n — phrases spanning
+    //    a line break won't match raw indexOf.
+    // 2. Section headings are in ALL CAPS — case-sensitive indexOf
+    //    fails when the manifest uses normal capitalisation.
+    //
+    // Fix: collapse \n → space (1:1 replacement, positions stay aligned),
+    // then lowercase both sides for case-insensitive matching. We slice
+    // from the original raw text using the matched positions.
     const flattened = raw.replace(/\n/g, " ");
-    const startFlat = start_phrase.replace(/\n/g, " ");
-    const endFlat = end_phrase.replace(/\n/g, " ");
+    const searchText = flattened.toLowerCase();
+    const startLower = start_phrase.replace(/\n/g, " ").toLowerCase();
+    const endLower = end_phrase.replace(/\n/g, " ").toLowerCase();
 
-    const startIdx = flattened.indexOf(startFlat);
+    const startIdx = searchText.indexOf(startLower);
     if (startIdx === -1) {
-      const snippet = raw.slice(0, 200).replace(/\n/g, "\\n");
+      const snippet = flattened.slice(0, 200).replace(/\s+/g, " ").trim();
       throw new FetchError(
-        `start_phrase not found in ${manifest.source_url}: "${start_phrase.slice(0, 60)}..." (text begins: "${snippet}")`,
+        `start_phrase not found in ${manifest.source_url}: "${start_phrase.slice(0, 60)}..." (text begins: "${snippet.slice(0, 120)}...")`,
         "start_phrase_not_found",
         manifest.id,
       );
     }
 
     // Look for end_phrase AFTER startIdx so we don't match an earlier occurrence.
-    const searchFrom = startIdx + startFlat.length;
-    const endIdx = flattened.indexOf(endFlat, searchFrom);
+    const searchFrom = startIdx + startLower.length;
+    const endIdx = searchText.indexOf(endLower, searchFrom);
     if (endIdx === -1) {
       const context = flattened
         .slice(startIdx, startIdx + 200)
@@ -113,8 +120,9 @@ export class PassageFetcher {
       );
     }
 
-    const sliceEnd = endIdx + endFlat.length;
-    // Slice from the original raw text — positions are 1:1 with flattened.
+    const sliceEnd = endIdx + endLower.length;
+    // Slice from the original raw text — positions are 1:1 with the
+    // transformed ("flattened then lowercased") search text.
     const body = raw.slice(startIdx, sliceEnd);
     const cleaned = normaliseWhitespace(body);
     const word_count = countWords(cleaned);
