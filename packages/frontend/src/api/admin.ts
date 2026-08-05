@@ -78,7 +78,7 @@ export async function updateProviders(
 }
 
 export async function testConnection(
-  settings: LlmConfigUpdate & { api_key: string },
+  settings: LlmConfigUpdate,
 ): Promise<TestConnectionResult> {
   return apiFetch<TestConnectionResult>("/api/admin/settings/llm/test", {
     method: "POST",
