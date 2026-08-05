@@ -1,31 +1,66 @@
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
 import type { AdminSettingsRepository } from "../../repositories/interfaces/admin-settings-repository.js";
-import { LLM_SETTING_KEYS, isValidProvider } from "../../llm/factory.js";
-import { LLM_PROVIDERS, type LLMProvider } from "../../llm/types.js";
+import {
+  BUILTIN_PROVIDERS,
+  LLM_SETTING_KEYS,
+  LLMFactory,
+  isValidProvider,
+  type ProviderDefinition,
+} from "../../llm/factory.js";
 
 /** Flat global LLM config. Secrets are masked. */
 interface LlmConfigResponse {
-  provider: LLMProvider | null;
+  provider: string | null;
   model: string | null;
   base_url: string | null;
-  /** Last 4 characters of the stored key, or null if not set. */
   api_key_tail: string | null;
   updated_at: string | null;
 }
 
 const PUT_BODY = z.object({
-  /** The LLM provider to use. */
-  provider: z.enum(LLM_PROVIDERS).optional(),
-  /** null/omit = leave unchanged. */
+  provider: z.string().min(1).max(50).optional().nullable(),
   model: z.string().min(1).max(200).optional().nullable(),
   base_url: z.string().url().optional().nullable(),
   api_key: z.string().min(1).max(500).optional().nullable(),
 });
 
+const PROVIDER_SCHEMA = z.object({
+  id: z.string().min(1).max(50).regex(/^[a-z0-9-]+$/, "must be a lowercase slug"),
+  name: z.string().min(1).max(100),
+  api_type: z.enum(["openai-compatible", "anthropic"]),
+});
+
+const PROVIDERS_BODY = z.object({
+  providers: z.array(PROVIDER_SCHEMA).min(1, "at least one provider is required"),
+});
+
+const TEST_BODY = z.object({
+  provider: z.string().min(1),
+  model: z.string().min(1).max(200).optional().nullable(),
+  base_url: z.string().url().optional().nullable(),
+  api_key: z.string().min(1).max(500),
+});
+
 function mask(value: string): string {
   if (value.length <= 4) return "****";
   return `****${value.slice(-4)}`;
+}
+
+async function loadProviders(
+  settings: AdminSettingsRepository,
+): Promise<ProviderDefinition[]> {
+  const row = await settings.get(LLM_SETTING_KEYS.providers);
+  if (!row) return BUILTIN_PROVIDERS;
+  try {
+    const parsed = JSON.parse(row.value);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed as ProviderDefinition[];
+    }
+    return BUILTIN_PROVIDERS;
+  } catch {
+    return BUILTIN_PROVIDERS;
+  }
 }
 
 export function createAdminSettingsRouter(
@@ -42,10 +77,11 @@ export function createAdminSettingsRouter(
 
   async function buildLlmConfigResponse(): Promise<LlmConfigResponse> {
     const bundle = await settings.getMany(LLM_KEYS);
+    const providers = await loadProviders(settings);
 
     const providerRaw = bundle.get(LLM_SETTING_KEYS.provider)?.value;
     const provider: LlmConfigResponse["provider"] =
-      providerRaw && isValidProvider(providerRaw) ? providerRaw : null;
+      providerRaw && isValidProvider(providerRaw, providers) ? providerRaw : null;
 
     const keySetting = bundle.get(LLM_SETTING_KEYS.api_key);
 
@@ -58,7 +94,7 @@ export function createAdminSettingsRouter(
     };
   }
 
-  /** GET — admin reads the current config (keys masked). */
+  // ── GET /llm ────────────────────────────────────────────────
   router.get("/llm", async (_req, res, next) => {
     try {
       res.json(await buildLlmConfigResponse());
@@ -67,7 +103,7 @@ export function createAdminSettingsRouter(
     }
   });
 
-  /** PUT — partial update. Only the fields provided are saved. */
+  // ── PUT /llm ────────────────────────────────────────────────
   router.put(
     "/llm",
     async (req: Request, res: Response, next: NextFunction) => {
@@ -93,6 +129,18 @@ export function createAdminSettingsRouter(
         }
         next(err);
         return;
+      }
+
+      // Validate provider against the DB-stored list.
+      if (body.provider != null) {
+        const providers = await loadProviders(settings);
+        if (!isValidProvider(body.provider, providers)) {
+          res.status(400).json({
+            error: "invalid_request",
+            message: `unknown provider: ${body.provider}`,
+          });
+          return;
+        }
       }
 
       try {
@@ -132,6 +180,210 @@ export function createAdminSettingsRouter(
         res.json(await buildLlmConfigResponse());
       } catch (err) {
         next(err);
+      }
+    },
+  );
+
+  // ── GET /llm/providers ──────────────────────────────────────
+  router.get("/llm/providers", async (_req, res, next) => {
+    try {
+      const providers = await loadProviders(settings);
+      res.json({ providers });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // ── PUT /llm/providers ──────────────────────────────────────
+  router.put(
+    "/llm/providers",
+    async (req: Request, res: Response, next: NextFunction) => {
+      const adminId = req.auth?.user_id;
+      if (!adminId) {
+        res.status(500).json({ error: "auth_not_initialised" });
+        return;
+      }
+
+      let body: z.infer<typeof PROVIDERS_BODY>;
+      try {
+        body = PROVIDERS_BODY.parse(req.body);
+      } catch (err) {
+        if (err instanceof z.ZodError) {
+          res.status(400).json({
+            error: "invalid_request",
+            issues: err.issues.map((i) => ({
+              path: i.path.join("."),
+              message: i.message,
+            })),
+          });
+          return;
+        }
+        next(err);
+        return;
+      }
+
+      // Check for duplicate IDs.
+      const ids = body.providers.map((p) => p.id);
+      if (new Set(ids).size !== ids.length) {
+        res.status(400).json({
+          error: "invalid_request",
+          message: "duplicate provider IDs",
+        });
+        return;
+      }
+
+      try {
+        await settings.upsert({
+          key: LLM_SETTING_KEYS.providers,
+          value: JSON.stringify(body.providers),
+          is_secret: false,
+          updated_by: adminId,
+        });
+
+        // If the currently-selected provider was removed, clear it.
+        const current = await settings.get(LLM_SETTING_KEYS.provider);
+        if (
+          current &&
+          !isValidProvider(current.value, body.providers)
+        ) {
+          await settings.delete(LLM_SETTING_KEYS.provider);
+        }
+
+        const providers = await loadProviders(settings);
+        res.json({ providers });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  // ── POST /llm/test ──────────────────────────────────────────
+  router.post(
+    "/llm/test",
+    async (req: Request, res: Response, next: NextFunction) => {
+      let body: z.infer<typeof TEST_BODY>;
+      try {
+        body = TEST_BODY.parse(req.body);
+      } catch (err) {
+        if (err instanceof z.ZodError) {
+          res.status(400).json({
+            error: "invalid_request",
+            issues: err.issues.map((i) => ({
+              path: i.path.join("."),
+              message: i.message,
+            })),
+          });
+          return;
+        }
+        next(err);
+        return;
+      }
+
+      // Build a temporary client from the provided values (don't save).
+      const factory = new LLMFactory(settings);
+      try {
+        // Temporarily insert the test settings so buildClient() can read them.
+        // We'll restore the originals afterward.
+        const origProvider = await settings.get(LLM_SETTING_KEYS.provider);
+        const origModel = await settings.get(LLM_SETTING_KEYS.model);
+        const origBaseUrl = await settings.get(LLM_SETTING_KEYS.base_url);
+        const origApiKey = await settings.get(LLM_SETTING_KEYS.api_key);
+
+        const testAdminId = req.auth?.user_id ?? 0;
+
+        try {
+          await settings.upsert({
+            key: LLM_SETTING_KEYS.provider,
+            value: body.provider,
+            is_secret: false,
+            updated_by: testAdminId,
+          });
+          if (body.model != null) {
+            await settings.upsert({
+              key: LLM_SETTING_KEYS.model,
+              value: body.model,
+              is_secret: false,
+              updated_by: testAdminId,
+            });
+          } else {
+            await settings.delete(LLM_SETTING_KEYS.model);
+          }
+          if (body.base_url != null) {
+            await settings.upsert({
+              key: LLM_SETTING_KEYS.base_url,
+              value: body.base_url,
+              is_secret: false,
+              updated_by: testAdminId,
+            });
+          } else {
+            await settings.delete(LLM_SETTING_KEYS.base_url);
+          }
+          await settings.upsert({
+            key: LLM_SETTING_KEYS.api_key,
+            value: body.api_key,
+            is_secret: true,
+            updated_by: testAdminId,
+          });
+
+          const client = await factory.buildClient();
+          const started = Date.now();
+          const result = await client.generate({
+            user: "Respond with exactly: ok",
+            max_tokens: 4,
+          });
+          const latency_ms = Date.now() - started;
+
+          res.json({
+            success: true,
+            model: result.model,
+            latency_ms,
+          });
+        } finally {
+          // Restore original settings (or clean up test values).
+          const restore = async (
+            key: string,
+            orig: { value: string; is_secret: boolean } | null,
+          ) => {
+            if (orig) {
+              await settings.upsert({
+                key,
+                value: orig.value,
+                is_secret: orig.is_secret,
+                updated_by: testAdminId,
+              });
+            } else {
+              await settings.delete(key);
+            }
+          };
+          await restore(
+            LLM_SETTING_KEYS.provider,
+            origProvider
+              ? { value: origProvider.value, is_secret: origProvider.is_secret }
+              : null,
+          );
+          await restore(
+            LLM_SETTING_KEYS.model,
+            origModel
+              ? { value: origModel.value, is_secret: origModel.is_secret }
+              : null,
+          );
+          await restore(
+            LLM_SETTING_KEYS.base_url,
+            origBaseUrl
+              ? { value: origBaseUrl.value, is_secret: origBaseUrl.is_secret }
+              : null,
+          );
+          await restore(
+            LLM_SETTING_KEYS.api_key,
+            origApiKey
+              ? { value: origApiKey.value, is_secret: origApiKey.is_secret }
+              : null,
+          );
+        }
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Connection test failed";
+        res.json({ success: false, error: message });
       }
     },
   );

@@ -1,33 +1,82 @@
-import { LLM_PROVIDERS, LLMError, type ILLMClient, type LLMProvider } from "./types.js";
-import { QwenClient } from "./providers/qwen.js";
+import { LLMError, type ILLMClient, type LLMProvider } from "./types.js";
 import { OpenAIClient } from "./providers/openai.js";
 import { AnthropicClient } from "./providers/anthropic.js";
 import type { AdminSettingsRepository } from "../repositories/interfaces/admin-settings-repository.js";
 
 /**
- * Admin-settings key conventions. One global LLM config — switching
- * providers replaces the old credentials (no per-provider storage).
+ * Admin-settings key conventions. One global LLM config.
  */
 export const LLM_SETTING_KEYS = {
   provider: "llm.provider",
   model: "llm.model",
   api_key: "llm.api_key",
   base_url: "llm.base_url",
+  providers: "llm.providers",
 } as const;
 
-export function isValidProvider(x: string): x is LLMProvider {
-  return (LLM_PROVIDERS as readonly string[]).includes(x);
+/**
+ * Built-in provider list used as a fallback when the DB has no providers
+ * configured. This also serves as the seed for first boot.
+ */
+export const BUILTIN_PROVIDERS = [
+  { id: "qwen", name: "Qwen (DashScope)", api_type: "openai-compatible" as const },
+  { id: "openai", name: "OpenAI", api_type: "openai-compatible" as const },
+  { id: "anthropic", name: "Anthropic", api_type: "anthropic" as const },
+  { id: "deepseek", name: "DeepSeek", api_type: "openai-compatible" as const },
+  { id: "kimi", name: "Kimi (Moonshot)", api_type: "openai-compatible" as const },
+  { id: "glm", name: "GLM (Zhipu)", api_type: "openai-compatible" as const },
+];
+
+export interface ProviderDefinition {
+  id: string;
+  name: string;
+  api_type: "openai-compatible" | "anthropic";
+}
+
+/**
+ * Hardcoded defaults for well-known providers. These are applied when the
+ * admin hasn't configured a model or base_url. Providers not listed here
+ * fall back to the OpenAIClient constructor defaults.
+ */
+const DEFAULTS: Record<string, { model: string; base_url: string }> = {
+  qwen: {
+    model: "qwen-plus",
+    base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+  },
+  openai: {
+    model: "gpt-4o-mini",
+    base_url: "https://api.openai.com/v1",
+  },
+};
+
+export function isValidProvider(
+  x: string,
+  providers: ProviderDefinition[],
+): boolean {
+  return providers.some((p) => p.id === x);
+}
+
+/**
+ * Reads the providers list from settings. Falls back to BUILTIN_PROVIDERS
+ * if nothing is stored in the DB.
+ */
+async function loadProviders(
+  settings: AdminSettingsRepository,
+): Promise<ProviderDefinition[]> {
+  const row = await settings.get(LLM_SETTING_KEYS.providers);
+  if (!row) return BUILTIN_PROVIDERS;
+  try {
+    const parsed = JSON.parse(row.value);
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed as ProviderDefinition[];
+    return BUILTIN_PROVIDERS;
+  } catch {
+    return BUILTIN_PROVIDERS;
+  }
 }
 
 /**
  * Builds an ILLMClient from admin-configured settings. Re-reads every
- * call so a config change in the admin UI takes effect on the next
- * generation without a server restart.
- *
- * Throws LLMError("provider_unknown") if no provider is configured or
- * if the configured provider has no API key — the caller handles this
- * gracefully (usually by surfacing "content pipeline requires LLM
- * setup" to the admin).
+ * call so a config change in the admin UI takes effect immediately.
  */
 export class LLMFactory {
   constructor(private readonly settings: AdminSettingsRepository) {}
@@ -42,7 +91,9 @@ export class LLMFactory {
     const bundle = await this.settings.getMany(keys);
 
     const provider = bundle.get(LLM_SETTING_KEYS.provider)?.value;
-    if (!provider || !isValidProvider(provider)) {
+    const providers = await loadProviders(this.settings);
+
+    if (!provider || !isValidProvider(provider, providers)) {
       throw new LLMError(
         "no LLM provider configured — set llm.provider in admin settings",
         "provider_unknown",
@@ -57,24 +108,28 @@ export class LLMFactory {
 
     if (!api_key) {
       throw new LLMError(
-        `no api_key configured — paste one in admin settings`,
+        "no api_key configured — paste one in admin settings",
         "invalid_api_key",
         provider,
         false,
       );
     }
 
-    switch (provider) {
-      case "qwen":
-        return new QwenClient({ api_key, model, base_url });
-      case "openai":
-        return new OpenAIClient({ provider, api_key, model, base_url });
-      case "anthropic":
-        return new AnthropicClient({ api_key, model, base_url });
-      case "deepseek":
-      case "kimi":
-      case "glm":
-        return new OpenAIClient({ provider, api_key, model, base_url });
+    // Look up the provider definition to determine client type.
+    const def = providers.find((p) => p.id === provider);
+    const api_type = def?.api_type ?? "openai-compatible";
+
+    if (api_type === "anthropic") {
+      return new AnthropicClient({ api_key, model, base_url });
     }
+
+    // Everything else is OpenAI-compatible.
+    const defaults = DEFAULTS[provider];
+    return new OpenAIClient({
+      provider: provider as LLMProvider,
+      api_key,
+      model: model ?? defaults?.model,
+      base_url: base_url ?? defaults?.base_url,
+    });
   }
 }

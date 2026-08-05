@@ -8,14 +8,15 @@
  */
 
 /**
- * The subset of providers the LLMFactory knows how to construct. Adding
- * a provider means: a new string literal here, a new env var for its
- * API key, a new concrete implementation, and one entry in the factory
- * switch. Deliberately narrow so a typo in the admin UI can't silently
- * fall through.
+ * Provider IDs are now stored in the database (admin_settings key
+ * "llm.providers"). The LLMFactory reads them at runtime so the admin
+ * can add/remove providers without code changes.
+ *
+ * This type is deliberately `string` rather than a union of literals —
+ * the valid set is dynamic. Validate using `isValidProvider()` from
+ * factory.ts which checks against the DB-stored list.
  */
-export const LLM_PROVIDERS = ["qwen", "openai", "anthropic", "deepseek", "kimi", "glm"] as const;
-export type LLMProvider = (typeof LLM_PROVIDERS)[number];
+export type LLMProvider = string;
 
 export interface GenerateOptions {
   /** Free-form system prompt. */

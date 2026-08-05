@@ -16,10 +16,14 @@ import { apiFetch } from "./client.js";
 
 /** LLM settings ------------------------------------------------------ */
 
-export type LLMProvider = "qwen" | "openai" | "anthropic" | "deepseek" | "kimi" | "glm";
+export interface ProviderDefinition {
+  id: string;
+  name: string;
+  api_type: "openai-compatible" | "anthropic";
+}
 
 export interface LlmConfigResponse {
-  provider: LLMProvider | null;
+  provider: string | null;
   model: string | null;
   base_url: string | null;
   /** Last 4 chars of the stored key, or null if not set. */
@@ -28,10 +32,17 @@ export interface LlmConfigResponse {
 }
 
 export interface LlmConfigUpdate {
-  provider?: LLMProvider;
+  provider?: string | null;
   model?: string | null;
   base_url?: string | null;
   api_key?: string | null;
+}
+
+export interface TestConnectionResult {
+  success: boolean;
+  model?: string;
+  latency_ms?: number;
+  error?: string;
 }
 
 export async function getLlmConfig(): Promise<LlmConfigResponse> {
@@ -44,6 +55,32 @@ export async function updateLlmConfig(
   return apiFetch<LlmConfigResponse>("/api/admin/settings/llm", {
     method: "PUT",
     body: update,
+  });
+}
+
+export async function getProviders(): Promise<ProviderDefinition[]> {
+  const r = await apiFetch<{ providers: ProviderDefinition[] }>(
+    "/api/admin/settings/llm/providers",
+  );
+  return r.providers;
+}
+
+export async function updateProviders(
+  providers: ProviderDefinition[],
+): Promise<ProviderDefinition[]> {
+  const r = await apiFetch<{ providers: ProviderDefinition[] }>(
+    "/api/admin/settings/llm/providers",
+    { method: "PUT", body: { providers } },
+  );
+  return r.providers;
+}
+
+export async function testConnection(
+  settings: LlmConfigUpdate & { api_key: string },
+): Promise<TestConnectionResult> {
+  return apiFetch<TestConnectionResult>("/api/admin/settings/llm/test", {
+    method: "POST",
+    body: settings,
   });
 }
 
