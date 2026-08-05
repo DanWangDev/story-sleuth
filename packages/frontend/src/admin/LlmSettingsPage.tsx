@@ -7,7 +7,7 @@ import {
 } from "../api/admin.js";
 import { ApiError } from "../api/client.js";
 
-const PROVIDERS: LLMProvider[] = ["qwen", "openai", "anthropic"];
+const PROVIDERS: LLMProvider[] = ["qwen", "openai", "anthropic", "deepseek", "kimi", "glm"];
 
 /**
  * Single global LLM configuration. Pick a provider, enter its model

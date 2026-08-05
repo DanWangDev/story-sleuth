@@ -16,7 +16,7 @@ import { apiFetch } from "./client.js";
 
 /** LLM settings ------------------------------------------------------ */
 
-export type LLMProvider = "qwen" | "openai" | "anthropic";
+export type LLMProvider = "qwen" | "openai" | "anthropic" | "deepseek" | "kimi" | "glm";
 
 export interface LlmConfigResponse {
   provider: LLMProvider | null;
