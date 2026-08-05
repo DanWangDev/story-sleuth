@@ -81,23 +81,25 @@ export class PassageFetcher {
   extract(raw: string, manifest: PassageManifest): FetchedPassage {
     const { start_phrase, end_phrase, approximate_words } = manifest.extract;
 
-    // Gutenberg has two quirks that break exact phrase matching:
-    // 1. Text is line-wrapped at ~70 chars with \n — phrases spanning
-    //    a line break won't match raw indexOf.
+    // Gutenberg has three quirks that break exact phrase matching:
+    // 1. Text is line-wrapped at ~70 chars with LF / CRLF — phrases
+    //    spanning a line break won't match raw indexOf.
     // 2. Section headings are in ALL CAPS — case-sensitive indexOf
     //    fails when the manifest uses normal capitalisation.
+    // 3. Stray \r characters mixed in with \n line endings.
     //
-    // Fix: collapse \n → space (1:1 replacement, positions stay aligned),
-    // then lowercase both sides for case-insensitive matching. We slice
-    // from the original raw text using the matched positions.
-    const flattened = raw.replace(/\n/g, " ");
-    const searchText = flattened.toLowerCase();
-    const startLower = start_phrase.replace(/\n/g, " ").toLowerCase();
-    const endLower = end_phrase.replace(/\n/g, " ").toLowerCase();
+    // Fix: normalise \r\n → \n, then [\r\n] → space (1:1 per \n, so
+    // positions stay aligned with the original). Lowercase both sides
+    // for case-insensitive matching. Slice from the normalised text
+    // so the output is clean regardless of Gutenberg's line endings.
+    const normalised = raw.replace(/\r\n/g, "\n").replace(/[\r\n]/g, " ");
+    const searchText = normalised.toLowerCase();
+    const startLower = start_phrase.replace(/\s+/g, " ").toLowerCase();
+    const endLower = end_phrase.replace(/\s+/g, " ").toLowerCase();
 
     const startIdx = searchText.indexOf(startLower);
     if (startIdx === -1) {
-      const snippet = flattened.slice(0, 200).replace(/\s+/g, " ").trim();
+      const snippet = normalised.slice(0, 200).replace(/\s+/g, " ").trim();
       throw new FetchError(
         `start_phrase not found in ${manifest.source_url}: "${start_phrase.slice(0, 60)}..." (text begins: "${snippet.slice(0, 120)}...")`,
         "start_phrase_not_found",
@@ -109,7 +111,7 @@ export class PassageFetcher {
     const searchFrom = startIdx + startLower.length;
     const endIdx = searchText.indexOf(endLower, searchFrom);
     if (endIdx === -1) {
-      const context = flattened
+      const context = normalised
         .slice(startIdx, startIdx + 200)
         .replace(/\s+/g, " ")
         .trim();
@@ -121,9 +123,9 @@ export class PassageFetcher {
     }
 
     const sliceEnd = endIdx + endLower.length;
-    // Slice from the original raw text — positions are 1:1 with the
-    // transformed ("flattened then lowercased") search text.
-    const body = raw.slice(startIdx, sliceEnd);
+    // Slice from the normalised text — positions are 1:1 with searchText
+    // because [\r\n] → space is char-for-char replacement.
+    const body = normalised.slice(startIdx, sliceEnd);
     const cleaned = normaliseWhitespace(body);
     const word_count = countWords(cleaned);
 
