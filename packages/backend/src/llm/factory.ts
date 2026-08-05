@@ -68,9 +68,13 @@ export class LLMFactory {
       case "qwen":
         return new QwenClient({ api_key, model, base_url });
       case "openai":
-        return new OpenAIClient({ api_key, model, base_url });
+        return new OpenAIClient({ provider, api_key, model, base_url });
       case "anthropic":
         return new AnthropicClient({ api_key, model, base_url });
+      case "deepseek":
+      case "kimi":
+      case "glm":
+        return new OpenAIClient({ provider, api_key, model, base_url });
     }
   }
 }

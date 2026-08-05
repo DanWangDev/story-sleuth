@@ -154,6 +154,60 @@ d("LLMFactory", () => {
     expect(client.provider).toBe("anthropic");
   });
 
+  it("builds an OpenAIClient when provider=deepseek", async () => {
+    await settings.upsert({
+      key: LLM_SETTING_KEYS.provider,
+      value: "deepseek",
+      is_secret: false,
+      updated_by: adminId,
+    });
+    await settings.upsert({
+      key: LLM_SETTING_KEYS.api_key,
+      value: "sk-d",
+      is_secret: true,
+      updated_by: adminId,
+    });
+    const client = await factory.buildClient();
+    expect(client).toBeInstanceOf(OpenAIClient);
+    expect(client.provider).toBe("deepseek");
+  });
+
+  it("builds an OpenAIClient when provider=kimi", async () => {
+    await settings.upsert({
+      key: LLM_SETTING_KEYS.provider,
+      value: "kimi",
+      is_secret: false,
+      updated_by: adminId,
+    });
+    await settings.upsert({
+      key: LLM_SETTING_KEYS.api_key,
+      value: "sk-k",
+      is_secret: true,
+      updated_by: adminId,
+    });
+    const client = await factory.buildClient();
+    expect(client).toBeInstanceOf(OpenAIClient);
+    expect(client.provider).toBe("kimi");
+  });
+
+  it("builds an OpenAIClient when provider=glm", async () => {
+    await settings.upsert({
+      key: LLM_SETTING_KEYS.provider,
+      value: "glm",
+      is_secret: false,
+      updated_by: adminId,
+    });
+    await settings.upsert({
+      key: LLM_SETTING_KEYS.api_key,
+      value: "sk-g",
+      is_secret: true,
+      updated_by: adminId,
+    });
+    const client = await factory.buildClient();
+    expect(client).toBeInstanceOf(OpenAIClient);
+    expect(client.provider).toBe("glm");
+  });
+
   it("re-reads settings on every buildClient call (no internal cache)", async () => {
     // Start on qwen.
     await settings.upsert({
