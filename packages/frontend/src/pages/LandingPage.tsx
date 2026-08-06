@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Session } from "@story-sleuth/shared";
+import { useState as useExamBoard } from "react";
+import type { ExamBoard, Session } from "@story-sleuth/shared";
 import { TopBar } from "../components/TopBar.js";
 import { useAuth } from "../auth/auth-context.js";
 import {
@@ -9,6 +10,8 @@ import {
   type SessionPayload,
 } from "../api/sessions.js";
 import { ApiError } from "../api/client.js";
+
+const BOARDS: ExamBoard[] = ["CEM", "GL", "ISEB"];
 
 /**
  * Landing page. Two states:
@@ -22,6 +25,7 @@ export function LandingPage(): React.ReactElement {
   const [inProgress, setInProgress] = useState<Session[] | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [board, setBoard] = useState<ExamBoard>("CEM");
 
   useEffect(() => {
     if (state.status !== "authenticated") return;
@@ -45,7 +49,7 @@ export function LandingPage(): React.ReactElement {
     try {
       const payload: SessionPayload = await createSession({
         mode: "practice",
-        exam_board: "GL",
+        exam_board: board,
       });
       navigate(`/sessions/${payload.session.id}`);
     } catch (err) {
@@ -184,22 +188,48 @@ export function LandingPage(): React.ReactElement {
         )}
 
         <section>
-          <button
-            type="button"
-            onClick={handleStart}
-            disabled={starting}
-            className="px-8 font-sans font-semibold rounded-md"
-            style={{
-              minHeight: 56,
-              background: "var(--color-accent)",
-              color: "var(--color-paper)",
-              fontSize: "18px",
-              cursor: starting ? "not-allowed" : "pointer",
-              opacity: starting ? 0.7 : 1,
-            }}
-          >
-            {starting ? "Starting..." : "Start a new session"}
-          </button>
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className="flex items-center gap-2">
+              <span
+                className="text-sm font-sans font-semibold"
+                style={{ color: "var(--color-ink-muted)" }}
+              >
+                Exam board:
+              </span>
+              <select
+                value={board}
+                onChange={(e) => setBoard(e.target.value as ExamBoard)}
+                className="rounded-md border px-3 py-2 font-sans text-sm"
+                style={{
+                  minHeight: 48,
+                  borderColor: "var(--color-rule)",
+                  background: "var(--color-page)",
+                }}
+              >
+                {BOARDS.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={handleStart}
+              disabled={starting}
+              className="px-8 font-sans font-semibold rounded-md"
+              style={{
+                minHeight: 56,
+                background: "var(--color-accent)",
+                color: "var(--color-paper)",
+                fontSize: "18px",
+                cursor: starting ? "not-allowed" : "pointer",
+                opacity: starting ? 0.7 : 1,
+              }}
+            >
+              {starting ? "Starting..." : "Start a new session"}
+            </button>
+          </div>
           {startError && (
             <p
               className="mt-3 text-sm"
