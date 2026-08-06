@@ -118,7 +118,7 @@ export class QuestionGenerator {
           system,
           user,
           temperature: 0.6,
-          max_tokens: 1200,
+          max_tokens: 4096,
           json_schema: QUESTION_JSON_SHAPE,
         });
         raw = result.text.trim();
