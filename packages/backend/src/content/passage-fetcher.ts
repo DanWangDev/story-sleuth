@@ -81,25 +81,25 @@ export class PassageFetcher {
   extract(raw: string, manifest: PassageManifest): FetchedPassage {
     const { start_phrase, end_phrase, approximate_words } = manifest.extract;
 
-    // Gutenberg has three quirks that break exact phrase matching:
-    // 1. Text is line-wrapped at ~70 chars with LF / CRLF — phrases
-    //    spanning a line break won't match raw indexOf.
-    // 2. Section headings are in ALL CAPS — case-sensitive indexOf
-    //    fails when the manifest uses normal capitalisation.
-    // 3. Stray \r characters mixed in with \n line endings.
-    //
-    // Fix: normalise \r\n → \n, then [\r\n] → space (1:1 per \n, so
-    // positions stay aligned with the original). Lowercase both sides
-    // for case-insensitive matching. Slice from the normalised text
-    // so the output is clean regardless of Gutenberg's line endings.
-    const normalised = raw.replace(/\r\n/g, "\n").replace(/[\r\n]/g, " ");
-    const searchText = normalised.toLowerCase();
-    const startLower = start_phrase.replace(/\s+/g, " ").toLowerCase();
-    const endLower = end_phrase.replace(/\s+/g, " ").toLowerCase();
+    // Gutenberg text differs from curated manifest phrases in several
+    // ways that break exact indexOf matching. Normalise both sides:
+    // 1. Line wrapping (\n, \r\n, stray \r) — collapse to space.
+    // 2. ALL CAPS section headings — lowercase for case-insensitive.
+    // 3. Typographic characters (em-dashes, smart quotes) — Gutenberg
+    //    uses plain ASCII while manifests often use proper typography.
+    // Normalise line endings and typographic characters on the display
+    // text first. Then lowercase for matching. Slice from the display
+    // text so positions are always aligned. The body gets normalised
+    // dashes/quotes but proper case — fine for reading.
+    const flat = raw.replace(/\r\n/g, "\n").replace(/[\r\n]/g, " ");
+    const displayText = normaliseTypography(flat);
+    const searchText = displayText.toLowerCase();
+    const startLower = normaliseTypography(start_phrase).toLowerCase();
+    const endLower = normaliseTypography(end_phrase).toLowerCase();
 
     const startIdx = searchText.indexOf(startLower);
     if (startIdx === -1) {
-      const snippet = normalised.slice(0, 200).replace(/\s+/g, " ").trim();
+      const snippet = displayText.slice(0, 200).replace(/\s+/g, " ").trim();
       throw new FetchError(
         `start_phrase not found in ${manifest.source_url}: "${start_phrase.slice(0, 60)}..." (text begins: "${snippet.slice(0, 120)}...")`,
         "start_phrase_not_found",
@@ -111,7 +111,7 @@ export class PassageFetcher {
     const searchFrom = startIdx + startLower.length;
     const endIdx = searchText.indexOf(endLower, searchFrom);
     if (endIdx === -1) {
-      const context = normalised
+      const context = displayText
         .slice(startIdx, startIdx + 200)
         .replace(/\s+/g, " ")
         .trim();
@@ -123,9 +123,7 @@ export class PassageFetcher {
     }
 
     const sliceEnd = endIdx + endLower.length;
-    // Slice from the normalised text — positions are 1:1 with searchText
-    // because [\r\n] → space is char-for-char replacement.
-    const body = normalised.slice(startIdx, sliceEnd);
+    const body = displayText.slice(startIdx, sliceEnd);
     const cleaned = normaliseWhitespace(body);
     const word_count = countWords(cleaned);
 
@@ -166,6 +164,21 @@ function normaliseWhitespace(text: string): string {
   const folded = paragraphs.map((p) => p.replace(/\s*\n\s*/g, " ").trim());
   // Re-join with double newlines so the display can re-paragraph cleanly.
   return folded.filter((p) => p.length > 0).join("\n\n");
+}
+
+/**
+ * Normalise text for phrase matching. Collapses typographic characters
+ * to their ASCII equivalents and lowercases. Gutenberg uses plain ASCII,
+ * but manifest writers often use proper typography (em-dashes, smart
+ * quotes, etc.). This bridges the gap.
+ */
+function normaliseTypography(text: string): string {
+  return text
+    .replace(/--/g, "-")    // ASCII double-dash → single
+    .replace(/[–—]/g, "-") // en-dash / em-dash → single -
+    .replace(/[“”]/g, '"')  // smart double quotes → "
+    .replace(/['']/g, "'")         // smart apostrophe → '
+    .replace(/…/g, "...");        // ellipsis → ...
 }
 
 function countWords(text: string): number {
