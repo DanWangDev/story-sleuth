@@ -102,8 +102,9 @@ describe("<IngestPage />", () => {
     expect(triggered[0].url).toContain("/api/admin/ingest/42");
 
     // The newly-created job should appear in the recent runs table.
+    // "completed" appears in both the status pill and the filter tab.
     await waitFor(() =>
-      expect(screen.getByText(/completed/i)).toBeInTheDocument(),
+      expect(screen.getAllByText(/completed/i).length).toBeGreaterThanOrEqual(2),
     );
     expect(screen.getByText(/4 \/ 0/)).toBeInTheDocument();
   });
