@@ -119,11 +119,18 @@ export class ContentPipeline {
       }
       throw err;
     }
+    console.log(
+      `[ingest #${input.job.id}] manifest loaded: "${manifest.title}" `
+      + `(${manifest.extract.approximate_words} words target)`,
+    );
 
     // Step 3: fetch + extract the passage text.
     let fetched;
     try {
       fetched = await this.fetcher.fetch(manifest);
+      console.log(
+        `[ingest #${input.job.id}] passage fetched: ${fetched.word_count} words`,
+      );
     } catch (err) {
       if (err instanceof FetchError) {
         throw new PipelineError(
@@ -152,6 +159,9 @@ export class ContentPipeline {
       body: fetched.body,
       status: "pending_review",
     });
+    console.log(
+      `[ingest #${input.job.id}] passage saved: id=${passage.id} v${passage.version}`,
+    );
 
     // Step 5: build the LLM client via the factory. Factory errors
     // surface early so we can stamp the job as failed without racking
@@ -159,6 +169,9 @@ export class ContentPipeline {
     let llm;
     try {
       llm = await this.llmFactory.buildClient();
+      console.log(
+        `[ingest #${input.job.id}] LLM client: provider=${llm.provider} model=${llm.model}`,
+      );
     } catch (err) {
       if (err instanceof LLMError) {
         throw new PipelineError(
@@ -178,6 +191,11 @@ export class ContentPipeline {
         : (["retrieval", "inference", "vocabulary-in-context"] as QuestionType[]));
     const target_count = input.question_count ?? 8;
 
+    console.log(
+      `[ingest #${input.job.id}] generating ${target_count} questions `
+      + `(board=${target_board}, types=${target_types.join(",")})`,
+    );
+
     const generator = new QuestionGenerator(llm);
     let genResult;
     try {
@@ -188,8 +206,15 @@ export class ContentPipeline {
         question_types: target_types,
         difficulty: manifest.difficulty,
       });
+      console.log(
+        `[ingest #${input.job.id}] generation done: `
+        + `${genResult.questions.length} ok / ${genResult.failed_count} failed`,
+      );
     } catch (err) {
       if (err instanceof GeneratorError) {
+        console.error(
+          `[ingest #${input.job.id}] generation FAILED [${err.code}]: ${err.message}`,
+        );
         throw new PipelineError(
           `question generation failed [${err.code}]: ${err.message}`,
           "generator_error",
@@ -224,6 +249,11 @@ export class ContentPipeline {
       genResult.failure_messages.length > 0
         ? `partial: ${genResult.failure_messages.join("\n")}`
         : undefined,
+    );
+
+    console.log(
+      `[ingest #${input.job.id}] job completed: `
+      + `${genResult.questions.length} questions / ${genResult.failed_count} failed`,
     );
 
     return { job: finalJob, passage };

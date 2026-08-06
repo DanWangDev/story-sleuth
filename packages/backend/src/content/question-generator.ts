@@ -64,16 +64,29 @@ export class QuestionGenerator {
 
     for (let i = 0; i < target_count; i += 1) {
       const type = req.question_types[i % req.question_types.length]!;
+      console.log(
+        `[generator] question ${i + 1}/${target_count} (${type}) — calling LLM...`,
+      );
       const question = await this.generateOne({
         ...req,
         question_type: type,
       }).catch((err: unknown) => {
+        console.error(
+          `[generator] question ${i + 1}/${target_count} FAILED: `
+          + `${err instanceof Error ? err.message : String(err)}`,
+        );
         failures.push(
           err instanceof Error ? err.message : String(err),
         );
         return null;
       });
-      if (question !== null) results.push(question);
+      if (question !== null) {
+        console.log(
+          `[generator] question ${i + 1}/${target_count} OK: `
+          + `"${question.text.slice(0, 60)}..."`,
+        );
+        results.push(question);
+      }
     }
 
     if (results.length === 0) {
