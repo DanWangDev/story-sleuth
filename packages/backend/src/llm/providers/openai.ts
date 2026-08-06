@@ -17,8 +17,19 @@ interface OpenAIChatRequest {
 
 interface OpenAIChatResponse {
   model: string;
-  choices: Array<{ message: { content: string } }>;
-  usage?: { prompt_tokens?: number; completion_tokens?: number };
+  choices: Array<{
+    message: {
+      content: string;
+      /** DeepSeek / other reasoning models put chain-of-thought here. */
+      reasoning_content?: string;
+    };
+  }>;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    /** Tokens used by reasoning (DeepSeek). */
+    reasoning_tokens?: number;
+  };
 }
 
 export interface OpenAIClientConfig {
@@ -72,9 +83,24 @@ export class OpenAIClient implements ILLMClient {
         false,
       );
     }
-    const content = choice.message?.content;
-    if (typeof content !== "string" || content.length === 0) {
-      // Include the raw choice in the error so the admin can debug.
+    const msg = choice.message;
+    let content: string | undefined = typeof msg?.content === "string" ? msg.content : undefined;
+
+    // DeepSeek and other reasoning models may produce reasoning_content
+    // but empty content when max_tokens is too low — the model spent all
+    // its tokens thinking and never output the final answer.
+    if (!content && msg?.reasoning_content) {
+      throw new LLMError(
+        `${this.provider} reasoning exhausted tokens before producing output. `
+        + `Increase max_tokens (current call used ${data.usage?.completion_tokens ?? "?"} tokens). `
+        + `Reasoning preview: "${msg.reasoning_content.slice(0, 100)}..."`,
+        "malformed_response",
+        this.provider,
+        true, // retryable with higher token count
+      );
+    }
+
+    if (!content) {
       const preview = JSON.stringify(choice).slice(0, 200);
       throw new LLMError(
         `${this.provider} returned an empty completion. Raw response: ${preview}`,
