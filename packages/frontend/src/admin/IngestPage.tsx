@@ -1,11 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import type { IngestJob } from "@story-sleuth/shared";
-import {
-  getJob,
-  listManifests,
-  listRecentJobs,
-  triggerIngest,
-} from "../api/admin.js";
+import { getJob, listRecentJobs } from "../api/admin.js";
 import { ApiError } from "../api/client.js";
 
 type Filter = "all" | "completed" | "failed";
@@ -17,13 +13,8 @@ type Filter = "all" | "completed" | "failed";
  * failures or successes.
  */
 export function IngestPage(): React.ReactElement {
-  const [manifests, setManifests] = useState<
-    { id: number; title: string; author: string; exam_boards: string[]; difficulty: number; word_count_target: number }[] | null
-  >(null);
   const [jobs, setJobs] = useState<IngestJob[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [triggering, setTriggering] = useState<number | null>(null);
-  const [triggerError, setTriggerError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -31,11 +22,8 @@ export function IngestPage(): React.ReactElement {
     let cancelled = false;
     (async () => {
       try {
-        const [m, j] = await Promise.all([listManifests(), listRecentJobs()]);
-        if (!cancelled) {
-          setManifests(m);
-          setJobs(j);
-        }
+        const j = await listRecentJobs();
+        if (!cancelled) setJobs(j);
       } catch (err) {
         if (cancelled) return;
         setLoadError(
@@ -71,23 +59,6 @@ export function IngestPage(): React.ReactElement {
     }, 2000);
     return () => clearInterval(t);
   }, [jobs]);
-
-  async function handleTrigger(manifestId: number): Promise<void> {
-    setTriggering(manifestId);
-    setTriggerError(null);
-    try {
-      const result = await triggerIngest(manifestId);
-      setJobs((prev) => (prev ? [result.job, ...prev] : [result.job]));
-    } catch (err) {
-      setTriggerError(
-        err instanceof ApiError
-          ? `Couldn't trigger ingest: ${err.message}`
-          : "Couldn't trigger ingest.",
-      );
-    } finally {
-      setTriggering(null);
-    }
-  }
 
   // Group jobs by manifest, keep the latest per manifest.
   const latestByManifest = useMemo(() => {
@@ -135,96 +106,33 @@ export function IngestPage(): React.ReactElement {
       </p>
     );
   }
-  if (!manifests || !jobs) {
+  if (!jobs) {
     return <p style={{ color: "var(--color-ink-muted)" }}>Loading…</p>;
   }
 
   return (
     <div className="grid gap-10">
-      {/* ── Manifests ──────────────────────────────────────── */}
+      {/* ── Header + CTA ────────────────────────────────────── */}
       <section>
         <h1
           className="font-serif text-3xl font-bold mb-2"
           style={{ color: "var(--color-ink)" }}
         >
-          Ingest content
+          Ingest runs
         </h1>
         <p
-          className="font-serif mb-6 max-w-[60ch]"
+          className="font-serif mb-4 max-w-[60ch]"
           style={{ color: "var(--color-ink-muted)" }}
         >
-          Pick a manifest to fetch the passage from its source URL and
-          generate a fresh set of questions. Everything lands in the review
-          queue as <em>pending_review</em> — nothing reaches students until
-          you approve it.
-        </p>
-        {triggerError && (
-          <p
-            className="mb-4 text-sm"
-            style={{ color: "var(--color-error)" }}
-            role="alert"
+          Monitor ingest jobs. To create new content, use the{" "}
+          <Link
+            to="/admin/add-passage"
+            style={{ color: "var(--color-accent)", fontWeight: 600 }}
           >
-            {triggerError}
-          </p>
-        )}
-        <div className="grid gap-3">
-          {manifests.map((m) => (
-            <div
-              key={m.id}
-              className="rounded-md border p-4 flex items-center justify-between gap-4"
-              style={{
-                background: "var(--color-paper)",
-                borderColor: "var(--color-rule)",
-              }}
-            >
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span
-                    className="font-serif text-lg font-semibold"
-                    style={{ color: "var(--color-ink)" }}
-                  >
-                    #{m.id} {m.title}
-                  </span>
-                  {latestByManifest.has(m.id) && (
-                    <StatusPill
-                      status={latestByManifest.get(m.id)!.status}
-                    />
-                  )}
-                </div>
-                <div
-                  className="text-sm font-sans"
-                  style={{ color: "var(--color-ink-muted)" }}
-                >
-                  {m.author} · {m.exam_boards.join(", ")} · difficulty{" "}
-                  {m.difficulty} · ~{m.word_count_target} words
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleTrigger(m.id)}
-                disabled={triggering === m.id}
-                className="px-4 py-2 font-sans font-semibold rounded-md shrink-0"
-                style={{
-                  minHeight: 40,
-                  background: "var(--color-accent)",
-                  color: "var(--color-paper)",
-                  opacity: triggering === m.id ? 0.7 : 1,
-                  cursor: triggering === m.id ? "not-allowed" : "pointer",
-                }}
-              >
-                {triggering === m.id ? "Running…" : "Run ingest"}
-              </button>
-            </div>
-          ))}
-          {manifests.length === 0 && (
-            <p
-              className="text-sm"
-              style={{ color: "var(--color-ink-muted)" }}
-            >
-              No manifests found.
-            </p>
-          )}
-        </div>
+            Add passage
+          </Link>{" "}
+          page — search for a book, pick a chapter, and generate questions.
+        </p>
       </section>
 
       {/* ── Jobs ────────────────────────────────────────────── */}
@@ -283,16 +191,12 @@ export function IngestPage(): React.ReactElement {
               </thead>
               <tbody>
                 {filteredLatest.map((j) => {
-                  const manifest = manifests.find(
-                    (m) => m.id === j.passage_manifest_id,
-                  );
                   const isOpen = expanded.has(String(j.passage_manifest_id));
                   const history = historyFor(j.passage_manifest_id);
                   return (
                     <JobRow
                       key={j.id}
                       job={j}
-                      manifestTitle={manifest?.title}
                       isExpanded={isOpen}
                       history={history}
                       onToggle={() => toggleExpand(j.passage_manifest_id)}

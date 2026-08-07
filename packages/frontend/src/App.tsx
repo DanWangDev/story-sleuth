@@ -12,6 +12,7 @@ import { ResultsPage } from "./pages/ResultsPage.js";
 import { AdminGuard } from "./admin/AdminGuard.js";
 import { AdminLayout } from "./admin/AdminLayout.js";
 import { LlmSettingsPage } from "./admin/LlmSettingsPage.js";
+import { AddPassagePage } from "./admin/AddPassagePage.js";
 import { IngestPage } from "./admin/IngestPage.js";
 import { ReviewPage } from "./admin/ReviewPage.js";
 
@@ -60,6 +61,7 @@ const routes: RouteObject[] = [
     children: [
       { index: true, element: <Navigate to="/admin/llm" replace /> },
       { path: "llm", element: <LlmSettingsPage /> },
+      { path: "add-passage", element: <AddPassagePage /> },
       { path: "ingest", element: <IngestPage /> },
       { path: "review", element: <ReviewPage /> },
     ],
