@@ -98,21 +98,30 @@ export class StandardEbooksAdapter implements ContentAdapter {
 
   private parseSearchResults(html: string): SearchResult[] {
     const results: SearchResult[] = [];
-    // Standard Ebooks lists books as <li> elements. Each book entry
-    // contains an <a> with the book URL and a <p> with author/title.
-    const liRe = /<li[^>]*>([\s\S]*?)<\/li>/gi;
+    // Standard Ebooks lists books as <li typeof="schema:Book"> elements.
+    // Title: <span property="schema:name"> inside the first <p><a>
+    // Author: <span property="schema:name"> inside <p class="author"><a>
+    // URL: the <a href> inside the first <p>
+    const liRe = /<li[^>]*typeof="schema:Book"[^>]*>([\s\S]*?)<\/li>/gi;
     let match;
     while ((match = liRe.exec(html)) !== null) {
       const li = match[1]!;
-      const linkMatch = /<a[^>]*href="(\/ebooks\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/i.exec(li);
-      if (!linkMatch) continue;
-      const href = linkMatch[1]!;
-      // The <a> content has nested elements; extract text.
-      const titleText = this.stripHtml(linkMatch[2]!);
 
-      // The author is in a <p> inside the <li>.
-      const authorMatch = /<p[^>]*>([\s\S]*?)<\/p>/i.exec(li);
-      const author = authorMatch ? this.stripHtml(authorMatch[1]!) : "Unknown";
+      // Find the book URL from the first <a> in a <p> (not the thumbnail <a>).
+      const bookLinkMatch = /<p[^>]*>\s*<a[^>]*href="(\/ebooks\/[^"]+)"[^>]*>/i.exec(li);
+      if (!bookLinkMatch) continue;
+      const href = bookLinkMatch[1]!;
+
+      // Title from the <span property="schema:name"> inside the book link.
+      const titleMatch = /<span[^>]*property="schema:name"[^>]*>([\s\S]*?)<\/span>/i.exec(li);
+      const titleText = titleMatch ? this.stripHtml(titleMatch[1]!) : "";
+
+      // Author from <p class="author">.
+      const authorBlockMatch = /<p[^>]*class="author"[^>]*>([\s\S]*?)<\/p>/i.exec(li);
+      const authorNameMatch = authorBlockMatch
+        ? /<span[^>]*property="schema:name"[^>]*>([\s\S]*?)<\/span>/i.exec(authorBlockMatch[1]!)
+        : null;
+      const author = authorNameMatch ? this.stripHtml(authorNameMatch[1]!) : "Unknown";
 
       if (!titleText || titleText.length < 2) continue;
 
