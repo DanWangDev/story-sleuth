@@ -23,33 +23,23 @@ const QUESTION_TYPES: QuestionType[] = [
 
 type Step = "search" | "sections" | "preview";
 
-/**
- * Add Passage page. The admin searches for a book, picks a chapter,
- * reviews the extracted text, sets exam metadata, and generates
- * questions — all without leaving this page.
- */
 export function AddPassagePage(): React.ReactElement {
-  // Search state
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
-  // Navigation
   const [step, setStep] = useState<Step>("search");
   const [selectedBook, setSelectedBook] = useState<SearchResult | null>(null);
   const [sections, setSections] = useState<Section[] | null>(null);
   const [loadingSections, setLoadingSections] = useState(false);
 
-  // Preview
   const [extracted, setExtracted] = useState<ExtractedText | null>(null);
   const [extracting, setExtracting] = useState(false);
 
-  // Metadata form
   const [examBoards, setExamBoards] = useState<ExamBoard[]>(["GL"]);
   const [difficulty, setDifficulty] = useState<number>(2);
 
-  // Ingest
   const [ingesting, setIngesting] = useState(false);
   const [ingestResult, setIngestResult] = useState<string | null>(null);
   const [ingestError, setIngestError] = useState<string | null>(null);
@@ -145,22 +135,16 @@ export function AddPassagePage(): React.ReactElement {
 
   return (
     <div>
-      <h1
-        className="font-serif text-3xl font-bold mb-2"
-        style={{ color: "var(--color-ink)" }}
-      >
+      <h1 className="font-serif text-3xl font-bold mb-2" style={{ color: "var(--color-ink)" }}>
         Add passage
       </h1>
-      <p
-        className="font-serif mb-8 max-w-[60ch]"
-        style={{ color: "var(--color-ink-muted)" }}
-      >
+      <p className="font-serif mb-8 max-w-[60ch]" style={{ color: "var(--color-ink-muted)" }}>
         Search for a book, pick a chapter, review the text, and generate
         questions. Everything lands in the review queue as{" "}
         <em>pending_review</em>.
       </p>
 
-      {/* ── Search bar ──────────────────────────────────────── */}
+      {/* Search bar */}
       <div className="flex gap-3 mb-6">
         <input
           type="text"
@@ -187,7 +171,7 @@ export function AddPassagePage(): React.ReactElement {
             opacity: searching ? 0.7 : 1,
           }}
         >
-          {searching ? "Searching…" : "Search"}
+          {searching ? "Searching..." : "Search"}
         </button>
       </div>
 
@@ -197,7 +181,7 @@ export function AddPassagePage(): React.ReactElement {
         </p>
       )}
 
-      {/* ── Step indicator ──────────────────────────────────── */}
+      {/* Step indicator */}
       {step !== "search" && (
         <div className="flex items-center gap-2 mb-6 text-sm font-sans">
           <button
@@ -206,20 +190,20 @@ export function AddPassagePage(): React.ReactElement {
             className="font-semibold"
             style={{ color: "var(--color-accent)" }}
           >
-            ← Back
+            {"←"} Back
           </button>
           <span style={{ color: "var(--color-ink-muted)" }}>
             {step === "sections" && selectedBook
-              ? `· ${selectedBook.title}`
+              ? ` · ${selectedBook.title}`
               : ""}
             {step === "preview" && extracted
-              ? `· ${extracted.title}`
+              ? ` · ${extracted.title}`
               : ""}
           </span>
         </div>
       )}
 
-      {/* ── Search results ──────────────────────────────────── */}
+      {/* Search results */}
       {step === "search" && results && (
         <div className="grid gap-3">
           {results.map((r) => (
@@ -227,22 +211,16 @@ export function AddPassagePage(): React.ReactElement {
               key={`${r.source}-${r.bookId}`}
               type="button"
               onClick={() => handleSelectBook(r)}
-              className="rounded-md border p-4 text-left hover:border-accent transition-colors"
+              className="rounded-md border p-4 text-left w-full"
               style={{
                 background: "var(--color-paper)",
                 borderColor: "var(--color-rule)",
               }}
             >
-              <div
-                className="font-serif text-lg font-semibold"
-                style={{ color: "var(--color-ink)" }}
-              >
+              <div className="font-serif text-lg font-semibold" style={{ color: "var(--color-ink)" }}>
                 {r.title}
               </div>
-              <div
-                className="text-sm font-sans"
-                style={{ color: "var(--color-ink-muted)" }}
-              >
+              <div className="text-sm font-sans" style={{ color: "var(--color-ink-muted)" }}>
                 {r.author} · {r.source}
                 {r.yearPublished ? ` · ${r.yearPublished}` : ""}
               </div>
@@ -251,13 +229,11 @@ export function AddPassagePage(): React.ReactElement {
         </div>
       )}
 
-      {/* ── Sections list ───────────────────────────────────── */}
+      {/* Sections list */}
       {step === "sections" && (
         <div>
           {loadingSections ? (
-            <p style={{ color: "var(--color-ink-muted)" }}>
-              Loading chapters…
-            </p>
+            <p style={{ color: "var(--color-ink-muted)" }}>Loading chapters...</p>
           ) : sections && sections.length > 0 ? (
             <div className="grid gap-3">
               {sections.map((s) => (
@@ -265,31 +241,22 @@ export function AddPassagePage(): React.ReactElement {
                   key={s.sectionId}
                   type="button"
                   onClick={() => handleSelectSection(s)}
-                  className="rounded-md border p-4 text-left hover:border-accent transition-colors"
+                  className="rounded-md border p-4 text-left w-full"
                   style={{
                     background: "var(--color-paper)",
                     borderColor: "var(--color-rule)",
                   }}
                 >
                   <div className="flex items-center justify-between gap-4">
-                    <div
-                      className="font-serif text-base font-semibold"
-                      style={{ color: "var(--color-ink)" }}
-                    >
+                    <div className="font-serif text-base font-semibold" style={{ color: "var(--color-ink)" }}>
                       {s.title}
                     </div>
-                    <span
-                      className="text-xs font-mono shrink-0"
-                      style={{ color: "var(--color-ink-muted)" }}
-                    >
+                    <span className="text-xs font-mono shrink-0" style={{ color: "var(--color-ink-muted)" }}>
                       ~{s.wordCount} words
                     </span>
                   </div>
                   {s.preview && (
-                    <div
-                      className="mt-2 text-sm leading-relaxed"
-                      style={{ color: "var(--color-ink-muted)" }}
-                    >
+                    <div className="mt-2 text-sm leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>
                       {s.preview}
                     </div>
                   )}
@@ -297,52 +264,43 @@ export function AddPassagePage(): React.ReactElement {
               ))}
             </div>
           ) : (
-            <p style={{ color: "var(--color-ink-muted)" }}>
-              No sections found for this book.
-            </p>
+            <p style={{ color: "var(--color-ink-muted)" }}>No sections found for this book.</p>
           )}
         </div>
       )}
 
-      {/* ── Preview + metadata form ─────────────────────────── */}
+      {/* Preview + metadata form */}
       {step === "preview" && (
         <div className="grid gap-6" style={{ gridTemplateColumns: "1fr 360px" }}>
           {/* Passage preview */}
           <div>
-            <h2
-              className="font-serif text-xl font-semibold mb-3"
-              style={{ color: "var(--color-ink)" }}
-            >
-              {extracting
-                ? "Extracting…"
-                : extracted
-                  ? extracted.title
-                  : "Preview"}
+            <h2 className="font-serif text-xl font-semibold mb-3" style={{ color: "var(--color-ink)" }}>
+              {extracting ? "Extracting..." : extracted ? extracted.title : "Preview"}
             </h2>
-            {extracting ? (
+            {extracting && (
               <p style={{ color: "var(--color-ink-muted)" }}>
-                Fetching text from {selectedBook?.source}…
+                Fetching text from {selectedBook?.source}...
               </p>
-            ) : extracted ? (
+            )}
+            {!extracting && extracted && (
               <div
-                className="rounded-md border p-6 font-serif text-passage leading-relaxed max-h-[600px] overflow-y-auto"
+                className="rounded-md border p-6 font-serif leading-relaxed max-h-[600px] overflow-y-auto"
                 style={{
                   background: "var(--color-paper)",
                   borderColor: "var(--color-rule)",
-                  lineHeight: 1.65,
+                  lineHeight: "1.65",
                   fontSize: "19px",
                 }}
               >
                 {extracted.body.split("\n\n").map((p, i) => (
-                  <p key={i} className="mb-4 last:mb-0">
+                  <p key={i} className="mb-4" style={{ marginBottom: i < extracted.body.split("\n\n").length - 1 ? "1rem" : 0 }}>
                     {p}
                   </p>
                 ))}
               </div>
-            ) : (
-              <p style={{ color: "var(--color-error") }}>
-                Failed to load preview.
-              </p>
+            )}
+            {!extracting && !extracted && (
+              <p style={{ color: "var(--color-error)" }}>Failed to load preview.</p>
             )}
           </div>
 
@@ -356,22 +314,19 @@ export function AddPassagePage(): React.ReactElement {
                   borderColor: "var(--color-rule)",
                 }}
               >
-                <h3
-                  className="font-sans text-sm font-semibold mb-3"
-                  style={{ color: "var(--color-ink)" }}
-                >
+                <h3 className="font-sans text-sm font-semibold mb-3" style={{ color: "var(--color-ink)" }}>
                   Passage info
                 </h3>
-                <div className="text-sm space-y-2" style={{ color: "var(--color-ink-muted)" }}>
-                  <div>
+                <div className="text-sm" style={{ color: "var(--color-ink-muted)" }}>
+                  <div className="mb-1">
                     <span className="font-semibold">Source:</span>{" "}
                     {extracted.source}
                   </div>
-                  <div>
+                  <div className="mb-1">
                     <span className="font-semibold">Author:</span>{" "}
                     {extracted.author}
                   </div>
-                  <div>
+                  <div className="mb-1">
                     <span className="font-semibold">Words:</span>{" "}
                     {extracted.wordCount}
                   </div>
@@ -385,10 +340,7 @@ export function AddPassagePage(): React.ReactElement {
                   borderColor: "var(--color-rule)",
                 }}
               >
-                <h3
-                  className="font-sans text-sm font-semibold mb-3"
-                  style={{ color: "var(--color-ink)" }}
-                >
+                <h3 className="font-sans text-sm font-semibold mb-3" style={{ color: "var(--color-ink)" }}>
                   Exam settings
                 </h3>
 
@@ -396,10 +348,7 @@ export function AddPassagePage(): React.ReactElement {
                   <Field label="Exam boards">
                     <div className="flex gap-2 flex-wrap">
                       {EXAM_BOARDS.map((b) => (
-                        <label
-                          key={b}
-                          className="flex items-center gap-1 text-sm"
-                        >
+                        <label key={b} className="flex items-center gap-1 text-sm">
                           <input
                             type="checkbox"
                             checked={examBoards.includes(b)}
@@ -445,25 +394,18 @@ export function AddPassagePage(): React.ReactElement {
                   background: "var(--color-accent)",
                   color: "var(--color-paper)",
                   opacity: ingesting ? 0.7 : 1,
-                  cursor: ingesting ? "not-allowed" : "pointer",
                 }}
               >
-                {ingesting ? "Generating…" : "Generate questions"}
+                {ingesting ? "Generating..." : "Generate questions"}
               </button>
 
               {ingestResult && (
-                <p
-                  className="mt-3 text-sm"
-                  style={{ color: "var(--color-accent)" }}
-                >
+                <p className="mt-3 text-sm" style={{ color: "var(--color-accent)" }}>
                   {ingestResult}
                 </p>
               )}
               {ingestError && (
-                <p
-                  className="mt-3 text-sm"
-                  style={{ color: "var(--color-error)" }}
-                >
+                <p className="mt-3 text-sm" style={{ color: "var(--color-error)" }}>
                   {ingestError}
                 </p>
               )}

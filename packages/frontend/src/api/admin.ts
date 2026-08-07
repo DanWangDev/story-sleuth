@@ -185,7 +185,7 @@ export interface IngestRunResponse {
 
 export async function triggerIngest(
   manifestId: number,
-  input: IngestRunInput = {},
+  input: IngestRunInput,
 ): Promise<IngestRunResponse> {
   return apiFetch<IngestRunResponse>(`/api/admin/ingest/${manifestId}`, {
     method: "POST",
