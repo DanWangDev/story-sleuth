@@ -2,51 +2,73 @@ import type { ContentAdapter, SearchQuery, SearchResult, Section, ExtractedText 
 
 /**
  * Standard Ebooks adapter. Standard Ebooks produces professionally
- * cleaned, properly formatted public domain ebooks. Their catalog
- * (~1,500 titles) is smaller than Gutenberg's but the text quality
- * is dramatically better — modern typography, proper chapter structure,
- * consistent HTML markup.
+ * cleaned, properly formatted public domain ebooks (~1,500 titles).
  *
- * Data sources:
- *   - OPDS feed: https://standardebooks.org/feeds/opds
- *   - Book pages: https://standardebooks.org/ebooks/{author}/{title}
- *   - HTML downloads: from the book page's download links
+ * Data sources (all public, no auth required):
+ *   - HTML search: https://standardebooks.org/ebooks?query=...
+ *   - Atom feed: https://standardebooks.org/feeds/atom/new-releases
+ *   - Single-page HTML: /ebooks/{author}/{title}/text/single-page
+ *
+ * The OPDS feed requires Patrons Circle membership — we use the HTML
+ * search page instead for catalog queries.
  */
 export class StandardEbooksAdapter implements ContentAdapter {
   readonly name = "standard-ebooks";
   readonly displayName = "Standard Ebooks";
 
-  private readonly opdsUrl = "https://standardebooks.org/feeds/opds";
+  private readonly baseUrl = "https://standardebooks.org";
 
   async search(query: SearchQuery): Promise<SearchResult[]> {
     const q = query.q ?? query.title ?? query.author ?? "";
     const url = q
-      ? `https://standardebooks.org/feeds/opds/search?query=${encodeURIComponent(q)}`
-      : this.opdsUrl;
+      ? `${this.baseUrl}/ebooks?query=${encodeURIComponent(q)}`
+      : `${this.baseUrl}/ebooks`;
+
+    console.log(`[std-ebooks] search: GET ${url}`);
 
     const res = await fetch(url, {
       headers: { "User-Agent": "story-sleuth/content-pipeline" },
     });
-    if (!res.ok) return [];
 
-    const text = await res.text();
-    return this.parseOpdsResults(text);
-  }
-
-  async listSections(bookId: string): Promise<Section[]> {
-    // bookId is the book's URL path, e.g. "/ebooks/kenneth-grahame/the-wind-in-the-willows"
-    const htmlUrl = `https://standardebooks.org${bookId}/text/single-page`;
-    const res = await fetch(htmlUrl, {
-      headers: { "User-Agent": "story-sleuth/content-pipeline" },
-    });
+    console.log(`[std-ebooks] search response: HTTP ${res.status}`);
     if (!res.ok) return [];
 
     const html = await res.text();
-    return this.parseSections(html);
+    const results = this.parseSearchResults(html);
+    console.log(`[std-ebooks] search parsed: ${results.length} results`);
+    for (const r of results) {
+      console.log(`  - "${r.title}" by ${r.author} [${r.bookId}]`);
+    }
+    return results;
+  }
+
+  async listSections(bookId: string): Promise<Section[]> {
+    const htmlUrl = `${this.baseUrl}${bookId}/text/single-page`;
+    console.log(`[std-ebooks] listSections: GET ${htmlUrl}`);
+
+    const res = await fetch(htmlUrl, {
+      headers: { "User-Agent": "story-sleuth/content-pipeline" },
+    });
+
+    console.log(`[std-ebooks] listSections response: HTTP ${res.status}`);
+    if (!res.ok) {
+      console.log(`[std-ebooks] listSections failed: HTTP ${res.status}`);
+      return [];
+    }
+
+    const html = await res.text();
+    const sections = this.parseSections(html);
+    console.log(`[std-ebooks] listSections parsed: ${sections.length} sections`);
+    for (const s of sections) {
+      console.log(`  - "${s.title}" (${s.wordCount} words)`);
+    }
+    return sections;
   }
 
   async extractSection(bookId: string, sectionId: string): Promise<ExtractedText> {
-    const htmlUrl = `https://standardebooks.org${bookId}/text/single-page`;
+    const htmlUrl = `${this.baseUrl}${bookId}/text/single-page`;
+    console.log(`[std-ebooks] extractSection: GET ${htmlUrl} section="${sectionId}"`);
+
     const res = await fetch(htmlUrl, {
       headers: { "User-Agent": "story-sleuth/content-pipeline" },
     });
@@ -56,8 +78,8 @@ export class StandardEbooksAdapter implements ContentAdapter {
 
     const html = await res.text();
     const { body, wordCount } = this.extractSectionText(html, sectionId);
+    console.log(`[std-ebooks] extractSection done: ${wordCount} words`);
 
-    // Extract metadata from the page title or the bookId path.
     const pathParts = bookId.replace(/^\/ebooks\//, "").split("/");
     const authorName = pathParts[0]?.replace(/-/g, " ") ?? "";
     const titleSlug = pathParts[1]?.replace(/-/g, " ") ?? "";
@@ -66,33 +88,40 @@ export class StandardEbooksAdapter implements ContentAdapter {
       title: this.titleCase(titleSlug),
       author: this.titleCase(authorName),
       source: "Standard Ebooks",
-      sourceUrl: `https://standardebooks.org${bookId}`,
+      sourceUrl: `${this.baseUrl}${bookId}`,
       body,
       wordCount,
     };
   }
 
-  // ── OPDS parsing ──────────────────────────────────────────────
+  // ── HTML search result parsing ───────────────────────────────
 
-  private parseOpdsResults(xml: string): SearchResult[] {
+  private parseSearchResults(html: string): SearchResult[] {
     const results: SearchResult[] = [];
-    // Simple regex-based OPDS entry extraction. The OPDS feed has
-    // <entry> elements with <title>, <author>, <id>, <link> children.
-    const entryRe = /<entry>([\s\S]*?)<\/entry>/g;
+    // Standard Ebooks lists books as <li> elements. Each book entry
+    // contains an <a> with the book URL and a <p> with author/title.
+    const liRe = /<li[^>]*>([\s\S]*?)<\/li>/gi;
     let match;
-    while ((match = entryRe.exec(xml)) !== null) {
-      const entry = match[1]!;
-      const title = this.tagContent(entry, "title");
-      const author = this.tagContent(entry, "author");
-      const href = this.opdsLinkHref(entry);
-      if (!title || !href) continue;
+    while ((match = liRe.exec(html)) !== null) {
+      const li = match[1]!;
+      const linkMatch = /<a[^>]*href="(\/ebooks\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/i.exec(li);
+      if (!linkMatch) continue;
+      const href = linkMatch[1]!;
+      // The <a> content has nested elements; extract text.
+      const titleText = this.stripHtml(linkMatch[2]!);
+
+      // The author is in a <p> inside the <li>.
+      const authorMatch = /<p[^>]*>([\s\S]*?)<\/p>/i.exec(li);
+      const author = authorMatch ? this.stripHtml(authorMatch[1]!) : "Unknown";
+
+      if (!titleText || titleText.length < 2) continue;
 
       results.push({
-        bookId: new URL(href).pathname,
-        title,
-        author: author ?? "Unknown",
+        bookId: href,
+        title: titleText,
+        author,
         source: "Standard Ebooks",
-        sourceUrl: href,
+        sourceUrl: `${this.baseUrl}${href}`,
       });
     }
     return results;
@@ -102,11 +131,11 @@ export class StandardEbooksAdapter implements ContentAdapter {
 
   private parseSections(html: string): Section[] {
     const sections: Section[] = [];
-    // Standard Ebooks single-page HTML uses <h2> for chapter headings
-    // and <h3> for sub-headings. Each chapter is an <h2> followed by
-    // paragraphs until the next <h2>.
     const bodyMatch = /<body[^>]*>([\s\S]*?)<\/body>/i.exec(html);
-    if (!bodyMatch) return sections;
+    if (!bodyMatch) {
+      console.log("[std-ebooks] parseSections: no <body> found");
+      return sections;
+    }
 
     const body = bodyMatch[1]!;
     // Split on <h2> to get chapter boundaries.
@@ -117,7 +146,7 @@ export class StandardEbooksAdapter implements ContentAdapter {
       const content = m[2]!;
       const text = this.stripHtml(content);
       const wordCount = text.split(/\s+/).filter((w) => w.length > 0).length;
-      if (wordCount < 20) continue; // skip very short sections (TOC, etc.)
+      if (wordCount < 20) continue;
 
       sections.push({
         sectionId: heading,
@@ -127,7 +156,6 @@ export class StandardEbooksAdapter implements ContentAdapter {
       });
     }
 
-    // If no <h2> headings found, treat the whole body as one section.
     if (sections.length === 0) {
       const text = this.stripHtml(body);
       const wordCount = text.split(/\s+/).filter((w) => w.length > 0).length;
@@ -152,24 +180,13 @@ export class StandardEbooksAdapter implements ContentAdapter {
     if (!bodyMatch) throw new Error("No <body> found in HTML");
 
     const body = bodyMatch[1]!;
-
-    // Find the section by heading text, then extract everything until
-    // the next <h2> or end of body.
     const headingRe = new RegExp(
       `<h2[^>]*>\\s*${this.escapeRegex(sectionId)}\\s*<\\/h2>([\\s\\S]*?)(?=<h2[^>]*>|$)`,
       "i",
     );
     const m = headingRe.exec(body);
-    if (!m) {
-      // Section not found — return entire body.
-      const text = this.stripHtml(body);
-      return {
-        body: text,
-        wordCount: text.split(/\s+/).filter((w) => w.length > 0).length,
-      };
-    }
-
-    const text = this.stripHtml(m[1]!);
+    const content = m ? m[1]! : body;
+    const text = this.stripHtml(content);
     return {
       body: text,
       wordCount: text.split(/\s+/).filter((w) => w.length > 0).length,
@@ -178,27 +195,22 @@ export class StandardEbooksAdapter implements ContentAdapter {
 
   // ── Helpers ───────────────────────────────────────────────────
 
-  private tagContent(xml: string, tag: string): string | null {
-    const re = new RegExp(`<${tag}[^>]*>(.*?)<\\/${tag}>`, "is");
-    const m = re.exec(xml);
-    return m ? this.stripHtml(m[1]!) : null;
-  }
-
-  private opdsLinkHref(entry: string): string | null {
-    const m = /<link[^>]*href="([^"]*)"[^>]*\/?>/i.exec(entry);
-    return m ? m[1]! : null;
-  }
-
   private stripHtml(html: string): string {
     return html
-      .replace(/<[^>]+>/g, "")     // strip tags
+      .replace(/<[^>]+>/g, "")
       .replace(/&amp;/g, "&")
       .replace(/&lt;/g, "<")
       .replace(/&gt;/g, ">")
       .replace(/&quot;/g, '"')
       .replace(/&#39;/g, "'")
       .replace(/&nbsp;/g, " ")
-      .replace(/\n{3,}/g, "\n\n")      // collapse multiple blank lines
+      .replace(/&mdash;/g, "—")
+      .replace(/&ndash;/g, "–")
+      .replace(/&rsquo;/g, "'")
+      .replace(/&lsquo;/g, "'")
+      .replace(/&rdquo;/g, '"')
+      .replace(/&ldquo;/g, '"')
+      .replace(/\n{3,}/g, "\n\n")
       .trim();
   }
 
