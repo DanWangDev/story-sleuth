@@ -14,16 +14,22 @@ export class ContentBrowser {
    * by bookId within each source.
    */
   async search(query: SearchQuery): Promise<SearchResult[]> {
+    console.log(`[browser] searching across ${this.adapters.length} adapters: q="${query.q ?? query.title ?? ""}"`);
     const results = await Promise.all(
       this.adapters.map(async (a) => {
         try {
-          return await a.search(query);
-        } catch {
+          const r = await a.search(query);
+          console.log(`[browser] ${a.name}: ${r.length} results`);
+          return r;
+        } catch (err) {
+          console.error(`[browser] ${a.name} search error:`, (err as Error).message);
           return [];
         }
       }),
     );
-    return results.flat();
+    const flat = results.flat();
+    console.log(`[browser] total: ${flat.length} results`);
+    return flat;
   }
 
   /**
