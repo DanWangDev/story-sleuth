@@ -21,6 +21,7 @@ export function AdminLayout(): React.ReactElement {
           aria-label="Admin sections"
         >
           <AdminTab to="/admin/llm" label="LLM settings" />
+          <AdminTab to="/admin/add-passage" label="Add passage" />
           <AdminTab to="/admin/ingest" label="Ingest" />
           <AdminTab to="/admin/review" label="Review queue" />
         </nav>

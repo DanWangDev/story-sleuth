@@ -86,6 +86,80 @@ export async function testConnection(
   });
 }
 
+/** Content browsing -------------------------------------------------- */
+
+export interface ContentSource {
+  name: string;
+  displayName: string;
+}
+
+export interface SearchResult {
+  bookId: string;
+  title: string;
+  author: string;
+  source: string;
+  sourceUrl: string;
+  yearPublished?: number;
+  genre?: string;
+}
+
+export interface Section {
+  sectionId: string;
+  title: string;
+  wordCount: number;
+  preview?: string;
+}
+
+export interface ExtractedText {
+  title: string;
+  author: string;
+  source: string;
+  sourceUrl: string;
+  body: string;
+  wordCount: number;
+}
+
+export async function listSources(): Promise<ContentSource[]> {
+  const r = await apiFetch<{ sources: ContentSource[] }>(
+    "/api/admin/ingest/sources",
+  );
+  return r.sources;
+}
+
+export async function searchBooks(
+  q: string,
+  source?: string,
+): Promise<SearchResult[]> {
+  const params = new URLSearchParams({ q });
+  if (source) params.set("source", source);
+  const r = await apiFetch<{ results: SearchResult[] }>(
+    `/api/admin/ingest/search?${params.toString()}`,
+  );
+  return r.results;
+}
+
+export async function listSections(
+  source: string,
+  bookId: string,
+): Promise<Section[]> {
+  const params = new URLSearchParams({ source, bookId });
+  const r = await apiFetch<{ sections: Section[] }>(
+    `/api/admin/ingest/sections?${params.toString()}`,
+  );
+  return r.sections;
+}
+
+export async function extractSection(
+  source: string,
+  bookId: string,
+  sectionId: string,
+): Promise<ExtractedText> {
+  return apiFetch<ExtractedText>("/api/admin/ingest/extract", {
+    method: "POST",
+    body: { source, bookId, sectionId },
+  });
+}
+
 /** Ingest ------------------------------------------------------------ */
 
 export async function listManifests(): Promise<PassageManifest[]> {
@@ -96,6 +170,8 @@ export async function listManifests(): Promise<PassageManifest[]> {
 }
 
 export interface IngestRunInput {
+  body: string;
+  word_count: number;
   question_count?: number;
   exam_board?: "CEM" | "GL" | "ISEB";
   question_types?: string[];
@@ -109,7 +185,7 @@ export interface IngestRunResponse {
 
 export async function triggerIngest(
   manifestId: number,
-  input: IngestRunInput = {},
+  input: IngestRunInput,
 ): Promise<IngestRunResponse> {
   return apiFetch<IngestRunResponse>(`/api/admin/ingest/${manifestId}`, {
     method: "POST",
