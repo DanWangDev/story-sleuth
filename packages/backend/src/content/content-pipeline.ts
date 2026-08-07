@@ -10,7 +10,6 @@ import type { QuestionRepository } from "../repositories/interfaces/question-rep
 import type { IngestJobRepository } from "../repositories/interfaces/ingest-job-repository.js";
 import type { LLMFactory } from "../llm/factory.js";
 import { LLMError } from "../llm/types.js";
-import { PassageFetcher, FetchError } from "./passage-fetcher.js";
 import { QuestionGenerator, GeneratorError } from "./question-generator.js";
 import { ManifestError, type ManifestLoader } from "./manifest-loader.js";
 
@@ -19,7 +18,6 @@ export class PipelineError extends Error {
     message: string,
     readonly code:
       | "manifest_error"
-      | "fetch_error"
       | "llm_unavailable"
       | "generator_error",
   ) {
@@ -45,8 +43,6 @@ export interface PipelineResult {
  * so the admin explicitly approves before students see it.
  */
 export class ContentPipeline {
-  private readonly fetcher = new PassageFetcher();
-
   constructor(
     private readonly manifests: ManifestLoader,
     private readonly passages: PassageRepository,
@@ -58,6 +54,10 @@ export class ContentPipeline {
   async run(input: {
     manifest_id: number;
     triggered_by_user_id: number;
+    /** Passage body text (from content adapter or manifest). Required. */
+    body: string;
+    /** Passage word count. Required. */
+    word_count: number;
     /** Override how many questions to generate (default 8). */
     question_count?: number;
     /** Override which exam board to target (default: first board in manifest). */
@@ -102,6 +102,8 @@ export class ContentPipeline {
   private async runInner(input: {
     job: IngestJob;
     manifest_id: number;
+    body: string;
+    word_count: number;
     question_count?: number;
     exam_board?: ExamBoard;
     question_types?: QuestionType[];
@@ -119,30 +121,18 @@ export class ContentPipeline {
       }
       throw err;
     }
+
     console.log(
       `[ingest #${input.job.id}] manifest loaded: "${manifest.title}" `
-      + `(${manifest.extract.approximate_words} words target)`,
+      + `(${input.word_count} words provided)`,
     );
 
-    // Step 3: fetch + extract the passage text.
-    let fetched;
-    try {
-      fetched = await this.fetcher.fetch(manifest);
-      console.log(
-        `[ingest #${input.job.id}] passage fetched: ${fetched.word_count} words`,
-      );
-    } catch (err) {
-      if (err instanceof FetchError) {
-        throw new PipelineError(
-          `passage fetch failed [${err.code}]: ${err.message}`,
-          "fetch_error",
-        );
-      }
-      throw err;
-    }
+    // Step 3: use the body text provided by the caller (from a content
+    // adapter or manifest). No fetching, no phrase matching.
+    const body = input.body;
+    const word_count = input.word_count;
 
-    // Step 4: insert the passage as pending_review (admin must approve
-    // it before students see it).
+    // Step 4: insert the passage as pending_review.
     const passage = await this.passages.create({
       title: manifest.title,
       author: manifest.author,
@@ -154,14 +144,11 @@ export class ContentPipeline {
       exam_boards: manifest.exam_boards,
       difficulty: manifest.difficulty,
       reading_level: manifest.reading_level,
-      word_count: fetched.word_count,
+      word_count,
       themes: manifest.themes,
-      body: fetched.body,
+      body,
       status: "pending_review",
     });
-    console.log(
-      `[ingest #${input.job.id}] passage saved: id=${passage.id} v${passage.version}`,
-    );
 
     // Step 5: build the LLM client via the factory. Factory errors
     // surface early so we can stamp the job as failed without racking

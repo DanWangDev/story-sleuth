@@ -48,9 +48,11 @@ export type Passage = z.infer<typeof PassageSchema>;
 
 /**
  * Shape of the manifest files committed to `content/passages/*.md`. The
- * content pipeline reads these, fetches the text from `source_url` between
- * `extract.start_phrase` and `extract.end_phrase`, and produces a Passage
- * entity.
+ * content pipeline reads the passage text from a content adapter (Standard
+ * Ebooks, Wikisource, etc.) and produces a Passage entity.
+ *
+ * `source_url` is provenance metadata, NOT a runtime dependency — the
+ * pipeline never fetches from it directly.
  */
 export const PassageManifestSchema = z.object({
   id: z.number().int().positive(),
@@ -67,11 +69,6 @@ export const PassageManifestSchema = z.object({
   reading_level: z.string(),
   themes: z.array(z.string()),
   question_types_suitable: z.array(QuestionTypeSchema),
-  extract: z.object({
-    start_phrase: z.string().min(1),
-    end_phrase: z.string().min(1),
-    approximate_words: z.number().int().positive(),
-  }),
   notes: z.string().optional(),
 });
 

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { EXAM_BOARDS, QUESTION_TYPES } from "@story-sleuth/shared";
 import type { ManifestLoader } from "../../content/manifest-loader.js";
 import type { ContentPipeline } from "../../content/content-pipeline.js";
+import type { ContentBrowser } from "../../content/content-browser.js";
 import type { IngestJobRepository } from "../../repositories/interfaces/ingest-job-repository.js";
 
 const ManifestIdParam = z.object({
@@ -13,6 +14,10 @@ const JobIdParam = z.object({ job_id: z.string().uuid() });
 
 const IngestBody = z
   .object({
+    /** Passage body text. Required — provided by content adapter or admin paste. */
+    body: z.string().min(1),
+    /** Passage word count. */
+    word_count: z.number().int().positive(),
     question_count: z.number().int().min(1).max(20).optional(),
     exam_board: z.enum(EXAM_BOARDS).optional(),
     question_types: z.array(z.enum(QUESTION_TYPES)).nonempty().optional(),
@@ -39,8 +44,77 @@ export function createAdminIngestRouter(
   pipeline: ContentPipeline,
   jobs: IngestJobRepository,
   manifests: ManifestLoader,
+  browser?: ContentBrowser,
 ): Router {
   const router = Router();
+
+  // ── Browse routes (content discovery) ──────────────────────────
+
+  const BrowseQuery = z.object({
+    q: z.string().optional(),
+    source: z.string().optional(),
+  });
+
+  const SectionsQuery = z.object({
+    source: z.string().min(1),
+    bookId: z.string().min(1),
+  });
+
+  const ExtractBody = z.object({
+    source: z.string().min(1),
+    bookId: z.string().min(1),
+    sectionId: z.string().min(1),
+  });
+
+  if (browser) {
+    router.get("/sources", (_req, res) => {
+      res.json({ sources: browser.listSources() });
+    });
+
+    router.get("/search", async (req, res, next) => {
+      try {
+        const { q, source } = BrowseQuery.parse(req.query);
+        const results = await browser.search({ q, title: q });
+        res.json({ results });
+      } catch (err) {
+        if (err instanceof z.ZodError) {
+          res.status(400).json({ error: "invalid_request" });
+          return;
+        }
+        next(err);
+      }
+    });
+
+    router.get("/sections", async (req, res, next) => {
+      try {
+        const { source, bookId } = SectionsQuery.parse(req.query);
+        const sections = await browser.listSections(source, bookId);
+        res.json({ sections });
+      } catch (err) {
+        if (err instanceof z.ZodError) {
+          res.status(400).json({ error: "invalid_request" });
+          return;
+        }
+        next(err);
+      }
+    });
+
+    router.post("/extract", async (req, res, next) => {
+      try {
+        const { source, bookId, sectionId } = ExtractBody.parse(req.body);
+        const extracted = await browser.extractSection(source, bookId, sectionId);
+        res.json(extracted);
+      } catch (err) {
+        if (err instanceof z.ZodError) {
+          res.status(400).json({ error: "invalid_request" });
+          return;
+        }
+        next(err);
+      }
+    });
+  }
+
+  // ── Manifest + ingest routes ───────────────────────────────────
 
   // GET /api/admin/ingest/manifests — list manifests the admin can ingest.
   router.get("/manifests", async (_req, res, next) => {
@@ -63,6 +137,8 @@ export function createAdminIngestRouter(
         const result = await pipeline.run({
           manifest_id,
           triggered_by_user_id: getAdminUserId(req),
+          body: body.body,
+          word_count: body.word_count,
           question_count: body.question_count,
           exam_board: body.exam_board,
           question_types: body.question_types,

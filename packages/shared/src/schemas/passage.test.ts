@@ -94,11 +94,6 @@ describe("PassageManifestSchema", () => {
     reading_level: "Year 5-6",
     themes: ["nature"],
     question_types_suitable: ["inference", "vocabulary-in-context"],
-    extract: {
-      start_phrase: "The Mole had been working very hard",
-      end_phrase: "sent from the heart of the earth",
-      approximate_words: 650,
-    },
     notes: "Chapter 1 opening",
   };
 
@@ -106,10 +101,10 @@ describe("PassageManifestSchema", () => {
     expect(PassageManifestSchema.safeParse(validManifest).success).toBe(true);
   });
 
-  it("rejects missing extract boundaries", () => {
-    const { extract, ...noExtract } = validManifest;
-    void extract;
-    expect(PassageManifestSchema.safeParse(noExtract).success).toBe(false);
+  it("rejects missing word_count_target", () => {
+    const { word_count_target, ...noTarget } = validManifest;
+    void word_count_target;
+    expect(PassageManifestSchema.safeParse(noTarget).success).toBe(false);
   });
 
   it("rejects question_types_suitable with an unknown tag", () => {

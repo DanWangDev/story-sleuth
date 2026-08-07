@@ -16,15 +16,13 @@ import { LLMFactory } from "../llm/factory.js";
 import type { ILLMClient } from "../llm/types.js";
 import { ManifestLoader } from "./manifest-loader.js";
 import { ContentPipeline } from "./content-pipeline.js";
-import { PassageFetcher } from "./passage-fetcher.js";
 
 const DATABASE_URL = process.env.DATABASE_URL;
 const hasDb = typeof DATABASE_URL === "string" && DATABASE_URL.length > 0;
 const d = hasDb ? describe : describe.skip;
 
-const SAMPLE_SOURCE = [
-  "Chapter I.",
-  "",
+// Body text for the test passage (no extract phrases, no fetching).
+const SAMPLE_BODY = [
   "The Mole had been working very hard all the morning, spring-cleaning",
   "his little home. First with brooms, then with dusters; then on ladders",
   "and steps and chairs, with a brush and a pail of whitewash; till he had",
@@ -35,6 +33,8 @@ const SAMPLE_SOURCE = [
   "longing. It was small wonder, then, that he suddenly flung down his",
   "brush on the floor and bolted out of the house without even waiting to put on his coat.",
 ].join("\n");
+
+const SAMPLE_WORD_COUNT = SAMPLE_BODY.split(/\s+/).filter((w) => w.length > 0).length;
 
 const MANIFEST_YAML = [
   "---",
@@ -54,10 +54,6 @@ const MANIFEST_YAML = [
   "question_types_suitable:",
   "  - inference",
   "  - retrieval",
-  "extract:",
-  '  start_phrase: "The Mole had been working very hard"',
-  '  end_phrase: "without even waiting to put on his coat."',
-  "  approximate_words: 90",
   "---",
   "",
 ].join("\n");
@@ -93,7 +89,6 @@ d("ContentPipeline (integration)", () => {
   let questions: PostgresQuestionRepository;
   let jobs: PostgresIngestJobRepository;
   let factory: LLMFactory;
-  let fakeFetch: ReturnType<typeof vi.fn>;
   let buildClientSpy: ReturnType<typeof vi.spyOn>;
   let adminId: number;
 
@@ -124,16 +119,10 @@ d("ContentPipeline (integration)", () => {
   });
 
   beforeEach(() => {
-    fakeFetch = vi.fn(
-      async () => new Response(SAMPLE_SOURCE, { status: 200 }),
-    );
-    // Fresh spy on the factory per test — buildClientSpy.mockResolvedValue
-    // lets each test hand back its own client with a distinct
-    // generate() implementation.
     buildClientSpy = vi.spyOn(factory, "buildClient");
   });
 
-  function makePipelineWithFakeFetch(client: ILLMClient): ContentPipeline {
+  function makePipeline(client: ILLMClient): ContentPipeline {
     const pipeline = new ContentPipeline(
       manifests,
       passages,
@@ -141,22 +130,19 @@ d("ContentPipeline (integration)", () => {
       jobs,
       factory,
     );
-    // Inject fake fetch into the fetcher this pipeline instance owns.
-    // The fetcher field is private; tests reach in via `any` since this
-    // is the only clean seam and keeps PassageFetcher's API narrow.
-    (pipeline as unknown as { fetcher: PassageFetcher }).fetcher =
-      new PassageFetcher(10_000, fakeFetch as unknown as typeof fetch);
     buildClientSpy.mockResolvedValue(client);
     return pipeline;
   }
 
-  it("runs the full pipeline end-to-end: fetch → passage insert → generate → questions insert → job completed", async () => {
+  it("runs the full pipeline: body → passage insert → generate → questions insert → job completed", async () => {
     const client = makeFakeClient(validQuestion());
-    const pipeline = makePipelineWithFakeFetch(client);
+    const pipeline = makePipeline(client);
 
     const result = await pipeline.run({
       manifest_id: 42,
       triggered_by_user_id: adminId,
+      body: SAMPLE_BODY,
+      word_count: SAMPLE_WORD_COUNT,
       question_count: 2,
       question_types: ["inference"],
     });
@@ -167,7 +153,7 @@ d("ContentPipeline (integration)", () => {
     expect(result.job.questions_failed).toBe(0);
     expect(result.job.completed_at).not.toBeNull();
 
-    // Passage was created as pending_review — never straight to published.
+    // Passage was created as pending_review.
     expect(result.passage).not.toBeNull();
     expect(result.passage!.status).toBe("pending_review");
     expect(result.passage!.title).toBe("Test Wind in the Willows");
@@ -185,11 +171,13 @@ d("ContentPipeline (integration)", () => {
 
   it("marks the job as failed when the manifest is missing", async () => {
     const client = makeFakeClient(validQuestion());
-    const pipeline = makePipelineWithFakeFetch(client);
+    const pipeline = makePipeline(client);
 
     const result = await pipeline.run({
       manifest_id: 999,
       triggered_by_user_id: adminId,
+      body: SAMPLE_BODY,
+      word_count: SAMPLE_WORD_COUNT,
     });
 
     expect(result.job.status).toBe("failed");
@@ -197,23 +185,9 @@ d("ContentPipeline (integration)", () => {
     expect(result.passage).toBeNull();
   });
 
-  it("marks the job as failed when the source URL returns 404", async () => {
-    const client = makeFakeClient(validQuestion());
-    fakeFetch = vi.fn(async () => new Response(null, { status: 404 }));
-    const pipeline = makePipelineWithFakeFetch(client);
-
-    const result = await pipeline.run({
-      manifest_id: 42,
-      triggered_by_user_id: adminId,
-    });
-    expect(result.job.status).toBe("failed");
-    expect(result.job.error_log).toMatch(/HTTP 404|http_error/);
-    expect(result.passage).toBeNull();
-  });
-
   it("marks the job as failed with a clear reason when LLM is unavailable", async () => {
     const client = makeFakeClient(validQuestion());
-    const pipeline = makePipelineWithFakeFetch(client);
+    const pipeline = makePipeline(client);
     // Force the factory to error.
     buildClientSpy.mockRejectedValueOnce(
       Object.assign(new Error("no provider"), {
@@ -227,12 +201,10 @@ d("ContentPipeline (integration)", () => {
     const result = await pipeline.run({
       manifest_id: 42,
       triggered_by_user_id: adminId,
+      body: SAMPLE_BODY,
+      word_count: SAMPLE_WORD_COUNT,
     });
-    // The passage was still inserted (step 4) before the LLM failure in
-    // step 5 — we don't half-undo. The job reflects the failure.
     expect(result.job.status).toBe("failed");
-    // The passage row exists in DB (not ideal but acceptable — admin
-    // can archive it). Verify NOT published.
     const freshPassage = await passages.findLatestPublishedById(
       (await passages.listPendingReview(100, 0))[0]?.id ?? "none",
     );
@@ -240,16 +212,10 @@ d("ContentPipeline (integration)", () => {
   });
 
   it("records partial failures: some questions fail generation but others succeed", async () => {
-    // Alternate bad/good responses — generator takes 3 attempts per
-    // failing question (initial + 2 retries) before giving up.
     let i = 0;
     const responses = [
-      // First question: 3 bad → gives up.
-      "bad",
-      "also bad",
-      "still bad",
-      // Second question: good on first try.
-      validQuestion(),
+      "bad", "also bad", "still bad", // first question: 3 bad → gives up
+      validQuestion(),                // second question: good
     ];
     const client: ILLMClient = {
       provider: "qwen",
@@ -259,11 +225,13 @@ d("ContentPipeline (integration)", () => {
         model: "test-model",
       })),
     };
-    const pipeline = makePipelineWithFakeFetch(client);
+    const pipeline = makePipeline(client);
 
     const result = await pipeline.run({
       manifest_id: 42,
       triggered_by_user_id: adminId,
+      body: SAMPLE_BODY,
+      word_count: SAMPLE_WORD_COUNT,
       question_count: 2,
       question_types: ["inference"],
     });
