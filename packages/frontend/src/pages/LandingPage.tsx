@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useState as useExamBoard } from "react";
 import type { ExamBoard, Session } from "@story-sleuth/shared";
 import { TopBar } from "../components/TopBar.js";
 import { useAuth } from "../auth/auth-context.js";
