@@ -28,6 +28,8 @@ import { SecretCrypto } from "./crypto/secret-crypto.js";
 import { LLMFactory } from "./llm/factory.js";
 import { ManifestLoader } from "./content/manifest-loader.js";
 import { ContentPipeline } from "./content/content-pipeline.js";
+import { StandardEbooksAdapter } from "./content/adapters/standard-ebooks.js";
+import { ContentBrowser } from "./content/content-browser.js";
 import type { Env } from "./config/env.js";
 
 export interface AppDeps {
@@ -95,6 +97,9 @@ export function createApp(deps: AppDeps): Express {
     llmFactory,
   );
 
+  // Content adapters for automated discovery + extraction.
+  const contentBrowser = new ContentBrowser([new StandardEbooksAdapter()]);
+
   const requireAuth = createRequireAuth({
     config: authConfig,
     userMappings,
@@ -116,7 +121,7 @@ export function createApp(deps: AppDeps): Express {
     "/api/admin/ingest",
     requireAuth,
     requireAdmin,
-    createAdminIngestRouter(contentPipeline, ingestJobs, manifestLoader),
+    createAdminIngestRouter(contentPipeline, ingestJobs, manifestLoader, contentBrowser),
   );
   app.use(
     "/api/admin/content",
