@@ -87,7 +87,7 @@ export class StandardEbooksAdapter implements ContentAdapter {
     return {
       title: this.titleCase(titleSlug),
       author: this.titleCase(authorName),
-      source: "Standard Ebooks",
+      source: this.name,
       sourceUrl: `${this.baseUrl}${bookId}`,
       body,
       wordCount,
@@ -129,7 +129,7 @@ export class StandardEbooksAdapter implements ContentAdapter {
         bookId: href,
         title: titleText,
         author,
-        source: "Standard Ebooks",
+        source: this.name,
         sourceUrl: `${this.baseUrl}${href}`,
       });
     }
