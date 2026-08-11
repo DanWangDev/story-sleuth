@@ -103,7 +103,7 @@ export function mockAuthenticatedAs(user: {
     for (const h of handlers) {
       if (h.match(url, init)) return h.respond();
     }
-    return new Response(JSON.stringify({ sessions: [] }), {
+    return new Response(JSON.stringify({ sessions: [], passages: [] }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
@@ -111,6 +111,8 @@ export function mockAuthenticatedAs(user: {
 
   return (url, init) => {
     for (const h of handlers) if (h.match(url, init)) return h.respond();
-    return new Response(null, { status: 404 });
+    return new Response(JSON.stringify({ sessions: [], passages: [] }), {
+      status: 200,
+    });
   };
 }
