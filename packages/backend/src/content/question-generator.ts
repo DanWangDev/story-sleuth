@@ -67,9 +67,12 @@ export class QuestionGenerator {
       console.log(
         `[generator] question ${i + 1}/${target_count} (${type}) — calling LLM...`,
       );
+      // Pass already-generated question stems as context to avoid repeats.
+      const existingStems = results.map((q) => q.text);
       const question = await this.generateOne({
         ...req,
         question_type: type,
+        existing_questions: existingStems,
       }).catch((err: unknown) => {
         console.error(
           `[generator] question ${i + 1}/${target_count} FAILED: `
@@ -108,10 +111,12 @@ export class QuestionGenerator {
     exam_board: ExamBoard;
     question_type: QuestionType;
     difficulty?: Difficulty;
+    /** Previously generated question stems to avoid repeating. */
+    existing_questions?: string[];
   }): Promise<GeneratedQuestion> {
     let lastError: string | null = null;
     for (let attempt = 0; attempt <= QuestionGenerator.RETRIES_PER_QUESTION; attempt += 1) {
-      const { system, user } = buildPrompt(input, lastError);
+      const { system, user } = buildPrompt(input, lastError, input.existing_questions ?? []);
       let raw: string;
       try {
         const result = await this.llm.generate({
@@ -220,6 +225,7 @@ function buildPrompt(
     difficulty?: Difficulty;
   },
   priorErrorHint: string | null,
+  existingQuestions: string[],
 ): { system: string; user: string } {
   const targetDifficulty = input.difficulty ?? input.passage.difficulty;
   const humanType = input.question_type.replaceAll("-", " ");
@@ -244,12 +250,22 @@ function buildPrompt(
     `  - Do NOT include answer keys outside \`correct_option\`. No "Answer: B" in the text.`,
   ].join("\n");
 
+  const dedupBlock =
+    existingQuestions.length > 0
+      ? [
+          `Questions already asked about this passage (do NOT repeat or rephrase any of these):`,
+          ...existingQuestions.map((q) => `  - "${q}"`),
+          ``,
+        ].join("\n")
+      : "";
+
   const user = [
     `Passage title: "${input.passage.title}" by ${input.passage.author}.`,
     ``,
     `Passage text:`,
     input.passage.body,
     ``,
+    dedupBlock,
     priorErrorHint
       ? `Your previous attempt failed validation: ${priorErrorHint}\nFix the issue in this response.`
       : `Write the question now. Return only the JSON object.`,

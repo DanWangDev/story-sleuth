@@ -127,10 +127,12 @@ export class ContentPipeline {
       + `(${input.word_count} words provided)`,
     );
 
-    // Step 3: use the body text provided by the caller (from a content
-    // adapter or manifest). No fetching, no phrase matching.
-    const body = input.body;
-    const word_count = input.word_count;
+    // Step 3: normalise the body text for paragraph display.
+    // Content adapters may produce text with single newlines (hard wraps)
+    // or double newlines (paragraph breaks). Collapse hard wraps within
+    // paragraphs while preserving paragraph boundaries.
+    const body = normaliseBody(input.body);
+    const word_count = countWordsInBody(body);
 
     // Step 4: insert the passage as pending_review.
     const passage = await this.passages.create({
@@ -245,4 +247,27 @@ export class ContentPipeline {
 
     return { job: finalJob, passage };
   }
+}
+
+/**
+ * Normalise passage body text for display. Collapses single newlines
+ * (hard line wraps) to spaces within paragraphs, while preserving blank
+ * lines as paragraph boundaries. Also normalises \r\n → \n and strips
+ * trailing whitespace.
+ */
+function normaliseBody(text: string): string {
+  // Canonicalize line endings.
+  let normalised = text.replace(/\r\n/g, "\n");
+  // Split on blank lines to detect paragraph boundaries.
+  const paragraphs = normalised.split(/\n\s*\n/);
+  // Within each paragraph, collapse single newlines to spaces.
+  const folded = paragraphs.map((p) => p.replace(/\s*\n\s*/g, " ").trim());
+  // Re-join paragraphs with double newlines.
+  return folded.filter((p) => p.length > 0).join("\n\n");
+}
+
+function countWordsInBody(text: string): number {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return 0;
+  return trimmed.split(/\s+/).length;
 }
