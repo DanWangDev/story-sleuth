@@ -28,6 +28,7 @@ export function LandingPage(): React.ReactElement {
   const [board, setBoard] = useState<ExamBoard>("CEM");
   const [passages, setPassages] = useState<Passage[]>([]);
   const [selectedPassage, setSelectedPassage] = useState<string>("");
+  const [mode, setMode] = useState<"practice" | "test">("practice");
 
   // Fetch in-progress sessions on auth.
   useEffect(() => {
@@ -71,9 +72,10 @@ export function LandingPage(): React.ReactElement {
     setStartError(null);
     try {
       const payload: SessionPayload = await createSession({
-        mode: "practice",
+        mode,
         exam_board: board,
         passage_id: selectedPassage || undefined,
+        time_allowed_seconds: mode === "test" ? 2400 : undefined,
       });
       navigate(`/sessions/${payload.session.id}`);
     } catch (err) {
@@ -214,6 +216,27 @@ export function LandingPage(): React.ReactElement {
         <section>
           <div className="flex flex-col gap-3 max-w-[480px]">
             <div className="flex items-center gap-3 flex-wrap">
+              <label className="flex items-center gap-2">
+                <span
+                  className="text-sm font-sans font-semibold"
+                  style={{ color: "var(--color-ink-muted)" }}
+                >
+                  Mode:
+                </span>
+                <select
+                  value={mode}
+                  onChange={(e) => setMode(e.target.value as "practice" | "test")}
+                  className="rounded-md border px-3 py-2 font-sans text-sm"
+                  style={{
+                    minHeight: 48,
+                    borderColor: "var(--color-rule)",
+                    background: "var(--color-page)",
+                  }}
+                >
+                  <option value="practice">Practice</option>
+                  <option value="test">Test (40 min)</option>
+                </select>
+              </label>
               <label className="flex items-center gap-2">
                 <span
                   className="text-sm font-sans font-semibold"
