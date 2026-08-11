@@ -4,6 +4,7 @@ import type { OptionLetter } from "@story-sleuth/shared";
 import { TopBar } from "../components/TopBar.js";
 import { PassagePanel } from "../components/PassagePanel.js";
 import { QuestionCard } from "../components/QuestionCard.js";
+import { Timer } from "../components/Timer.js";
 import {
   endSession,
   loadSession,
@@ -184,6 +185,18 @@ export function SessionPage(): React.ReactElement {
             style={{ color: "var(--color-ink-muted)" }}
             aria-live="polite"
           >
+            {payload.session.time_allowed_seconds != null && (
+              <>
+                <Timer
+                  totalSeconds={payload.session.time_allowed_seconds}
+                  onExpired={() => {
+                    if (id) void handleFinish();
+                  }}
+                  running={!payload.session.ended_at}
+                />
+                <span style={{ color: "var(--color-rule)" }}>|</span>
+              </>
+            )}
             {answered} of {total} answered
           </span>
         }
