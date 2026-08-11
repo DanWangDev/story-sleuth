@@ -279,7 +279,7 @@ d("Sessions router (HTTP integration)", () => {
       expect(res.body).not.toHaveProperty("is_correct");
     });
 
-    it("409 on duplicate answer for the same question in the same session", async () => {
+    it("allows overwriting a previous answer (undo + resubmit)", async () => {
       const body = {
         question_id: publishedQuestionIds[0],
         selected_letter: "A" as const,
@@ -289,12 +289,13 @@ d("Sessions router (HTTP integration)", () => {
         .post(`/api/sessions/${sessionId}/answers`)
         .set("x-test-user-id", String(userA.id))
         .send(body);
+      // Resubmit with a different answer — should be accepted (not 409).
       const dup = await request(app)
         .post(`/api/sessions/${sessionId}/answers`)
         .set("x-test-user-id", String(userA.id))
         .send(body);
-      expect(dup.status).toBe(409);
-      expect(dup.body.error).toBe("duplicate_answer");
+      expect(dup.status).toBe(200);
+      expect(dup.body.accepted).toBe(true);
     });
 
     it("400 when question_id is not part of this session", async () => {
