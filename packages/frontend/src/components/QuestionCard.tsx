@@ -60,7 +60,7 @@ export function QuestionCard({
       >
         {question.text}
       </p>
-      <fieldset className="space-y-2" disabled={submitted}>
+      <fieldset className="space-y-2">
         <legend className="sr-only">Answer options</legend>
         {question.options.map((option) => {
           const isSelected = selected === option.letter;
@@ -114,10 +114,10 @@ export function QuestionCard({
                 ? "var(--color-ink-muted)"
                 : "var(--color-paper)",
             cursor:
-              !selected || submitted || submitting ? "not-allowed" : "pointer",
+              !selected || submitting ? "not-allowed" : "pointer",
           }}
         >
-          {submitted ? "Answer saved" : submitting ? "Saving..." : "Submit answer"}
+          {submitted ? "Change answer" : submitting ? "Saving..." : "Submit answer"}
         </button>
       </div>
     </article>

@@ -213,7 +213,7 @@ describe("<SessionPage />", () => {
 
     await waitFor(() => {
       expect(
-        screen.getAllByRole("button", { name: /answer saved/i })[0],
+        screen.getAllByRole("button", { name: /change answer/i })[0],
       ).toBeDisabled();
     });
     expect(answersCalls).toHaveLength(1);

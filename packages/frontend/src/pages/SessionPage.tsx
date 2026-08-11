@@ -88,7 +88,7 @@ export function SessionPage(): React.ReactElement {
   const handleSubmit = useCallback(
     async (qid: string) => {
       const a = answers[qid];
-      if (!a || a.submitted || !id) return;
+      if (!a || !id) return;
       setSubmittingQid(qid);
       const started = startTimesRef.current[qid] ?? Date.now();
       try {

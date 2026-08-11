@@ -69,7 +69,12 @@ export interface UserStatsSummary {
 export interface StudentAttemptRepository {
   findBySession(session_id: string): Promise<StudentAttempt[]>;
 
+  findById(id: string): Promise<StudentAttempt | null>;
+
   create(input: StudentAttemptCreateInput): Promise<StudentAttempt>;
+
+  /** Delete a single attempt by ID. Used for answer-undo in practice mode. */
+  deleteById(id: string): Promise<void>;
 
   /**
    * Accuracy broken down by question_type_tag. Deduplicates via

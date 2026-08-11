@@ -64,6 +64,21 @@ export class PostgresStudentAttemptRepository
     return rows.map(rowToAttempt);
   }
 
+  async findById(id: string): Promise<StudentAttempt | null> {
+    const rows = await this.sql<Row[]>`
+      SELECT ${this.sql.unsafe(SELECT_COLS)}
+      FROM student_attempts
+      WHERE id = ${id}
+    `;
+    return rows[0] ? rowToAttempt(rows[0]) : null;
+  }
+
+  async deleteById(id: string): Promise<void> {
+    await this.sql`
+      DELETE FROM student_attempts WHERE id = ${id}
+    `;
+  }
+
   async create(input: StudentAttemptCreateInput): Promise<StudentAttempt> {
     const id = randomUUID();
     const rows = await this.sql<Row[]>`

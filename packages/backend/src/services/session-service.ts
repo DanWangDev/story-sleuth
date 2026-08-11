@@ -275,16 +275,13 @@ export class SessionService {
       );
     }
 
-    // Idempotency on (session_id, question_id): if the student already
-    // answered this question in this session, reject with 409 rather
-    // than silently creating a duplicate attempt.
+    // If already answered, delete the previous attempt so the student
+    // can change their answer (undo + resubmit). This is deliberate —
+    // practice mode should allow changing answers.
     const existingAttempts = await this.attempts.findBySession(session.id);
-    if (existingAttempts.some((a) => a.question_id === input.question_id)) {
-      throw new SessionError(
-        "already answered this question in this session",
-        "duplicate_answer",
-        409,
-      );
+    const prev = existingAttempts.find((a) => a.question_id === input.question_id);
+    if (prev) {
+      await this.attempts.deleteById(prev.id);
     }
 
     const selected = question.options.find(
