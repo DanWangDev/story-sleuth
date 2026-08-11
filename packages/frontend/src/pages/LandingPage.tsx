@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { ExamBoard, Session } from "@story-sleuth/shared";
+import type { ExamBoard, Passage, Session } from "@story-sleuth/shared";
 import { TopBar } from "../components/TopBar.js";
 import { useAuth } from "../auth/auth-context.js";
 import {
   createSession,
+  listAvailablePassages,
   listInProgress,
   type SessionPayload,
 } from "../api/sessions.js";
@@ -25,7 +26,10 @@ export function LandingPage(): React.ReactElement {
   const [startError, setStartError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [board, setBoard] = useState<ExamBoard>("CEM");
+  const [passages, setPassages] = useState<Passage[]>([]);
+  const [selectedPassage, setSelectedPassage] = useState<string>("");
 
+  // Fetch in-progress sessions on auth.
   useEffect(() => {
     if (state.status !== "authenticated") return;
     let cancelled = false;
@@ -42,6 +46,26 @@ export function LandingPage(): React.ReactElement {
     };
   }, [state.status]);
 
+  // Fetch available passages when exam board changes.
+  useEffect(() => {
+    if (state.status !== "authenticated") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const p = await listAvailablePassages(board);
+        if (!cancelled) {
+          setPassages(p);
+          setSelectedPassage("");
+        }
+      } catch {
+        if (!cancelled) setPassages([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [board, state.status]);
+
   async function handleStart(): Promise<void> {
     setStarting(true);
     setStartError(null);
@@ -49,6 +73,7 @@ export function LandingPage(): React.ReactElement {
       const payload: SessionPayload = await createSession({
         mode: "practice",
         exam_board: board,
+        passage_id: selectedPassage || undefined,
       });
       navigate(`/sessions/${payload.session.id}`);
     } catch (err) {
@@ -187,31 +212,60 @@ export function LandingPage(): React.ReactElement {
         )}
 
         <section>
-          <div className="flex items-center gap-3 flex-wrap">
-            <label className="flex items-center gap-2">
-              <span
-                className="text-sm font-sans font-semibold"
-                style={{ color: "var(--color-ink-muted)" }}
-              >
-                Exam board:
-              </span>
-              <select
-                value={board}
-                onChange={(e) => setBoard(e.target.value as ExamBoard)}
-                className="rounded-md border px-3 py-2 font-sans text-sm"
-                style={{
-                  minHeight: 48,
-                  borderColor: "var(--color-rule)",
-                  background: "var(--color-page)",
-                }}
-              >
-                {BOARDS.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <div className="flex flex-col gap-3 max-w-[480px]">
+            <div className="flex items-center gap-3 flex-wrap">
+              <label className="flex items-center gap-2">
+                <span
+                  className="text-sm font-sans font-semibold"
+                  style={{ color: "var(--color-ink-muted)" }}
+                >
+                  Exam board:
+                </span>
+                <select
+                  value={board}
+                  onChange={(e) => setBoard(e.target.value as ExamBoard)}
+                  className="rounded-md border px-3 py-2 font-sans text-sm"
+                  style={{
+                    minHeight: 48,
+                    borderColor: "var(--color-rule)",
+                    background: "var(--color-page)",
+                  }}
+                >
+                  {BOARDS.map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {passages && passages.length > 0 && (
+                <label className="flex items-center gap-2">
+                  <span
+                    className="text-sm font-sans font-semibold"
+                    style={{ color: "var(--color-ink-muted)" }}
+                  >
+                    Passage:
+                  </span>
+                  <select
+                    value={selectedPassage}
+                    onChange={(e) => setSelectedPassage(e.target.value)}
+                    className="rounded-md border px-3 py-2 font-sans text-sm max-w-[320px]"
+                    style={{
+                      minHeight: 48,
+                      borderColor: "var(--color-rule)",
+                      background: "var(--color-page)",
+                    }}
+                  >
+                    <option value="">Any (random)</option>
+                    {passages.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.title} ({p.difficulty}/3)
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
             <button
               type="button"
               onClick={handleStart}
@@ -224,6 +278,7 @@ export function LandingPage(): React.ReactElement {
                 fontSize: "18px",
                 cursor: starting ? "not-allowed" : "pointer",
                 opacity: starting ? 0.7 : 1,
+                alignSelf: "flex-start",
               }}
             >
               {starting ? "Starting..." : "Start a new session"}

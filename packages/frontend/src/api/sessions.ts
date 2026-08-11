@@ -66,6 +66,16 @@ export interface CreateSessionBody {
   time_allowed_seconds?: number;
 }
 
+export async function listAvailablePassages(
+  examBoard?: ExamBoard,
+): Promise<Passage[]> {
+  const params = examBoard ? `?exam_board=${examBoard}` : "";
+  const r = await apiFetch<{ passages: Passage[] }>(
+    `/api/sessions/available-passages${params}`,
+  );
+  return r.passages;
+}
+
 export async function createSession(
   body: CreateSessionBody,
 ): Promise<SessionPayload> {

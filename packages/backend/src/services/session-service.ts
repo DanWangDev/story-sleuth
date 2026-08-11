@@ -104,6 +104,28 @@ export class SessionService {
     private readonly attempts: StudentAttemptRepository,
   ) {}
 
+  /**
+   * List published passages available for students. If exam_board is
+   * provided, filters to that board; otherwise returns all published.
+   */
+  async listAvailablePassages(examBoard?: ExamBoard): Promise<Passage[]> {
+    if (examBoard) {
+      return this.passages.listPublishedByExamBoard(examBoard, 50, 0);
+    }
+    // No board specified — return all published across boards.
+    const allBoards: ExamBoard[] = ["CEM", "GL", "ISEB"];
+    const results = await Promise.all(
+      allBoards.map((b) => this.passages.listPublishedByExamBoard(b, 50, 0)),
+    );
+    // Deduplicate by passage ID (a passage can appear for multiple boards).
+    const seen = new Set<string>();
+    return results.flat().filter((p) => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
+  }
+
   async createSession(input: CreateSessionInput): Promise<SessionPayload> {
     // Pick the passage.
     let passage: Passage | null;

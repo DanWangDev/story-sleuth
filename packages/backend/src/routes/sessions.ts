@@ -57,6 +57,19 @@ export function createSessionsRouter(svc: SessionService): Router {
   });
 
   // GET /api/sessions/in-progress — landing page resume card
+  // GET /api/sessions/available-passages?exam_board=CEM
+  // Registered BEFORE /:id so the literal route wins.
+  router.get("/available-passages", async (req, res, next) => {
+    try {
+      const board = ExamBoardSchema.optional().parse(req.query.exam_board);
+      const passages = await svc.listAvailablePassages(board);
+      res.json({ passages });
+    } catch (err) {
+      handleError(err, res, next);
+    }
+  });
+
+  // GET /api/sessions/in-progress — landing page resume card
   // Registered BEFORE /:id so the literal route wins.
   router.get("/in-progress", async (req, res, next) => {
     try {
