@@ -1,0 +1,45 @@
+name: Deploy to NAS
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Deploy story-sleuth
+    # Gated by the org-level ENABLE_NAS_DEPLOY variable: the job skips until
+    # the shared NAS runner is registered and deploys are switched on.
+    if: ${{ github.event.workflow_run.conclusion == 'success' && vars.ENABLE_NAS_DEPLOY == 'true' }}
+    runs-on: nas
+    steps:
+      - name: Pull and restart
+        run: |
+          set -e
+          cd /volume1/docker/story-sleuth
+          docker compose -f docker-compose.prod.yml pull
+          docker compose -f docker-compose.prod.yml down
+          docker compose -f docker-compose.prod.yml up -d
+
+      - name: Wait for the backend to become healthy
+        run: |
+          set -e
+          # Runs inside the runner container — health is checked by exec'ing
+          # INTO the backend container (no networking assumptions).
+          for i in $(seq 1 30); do
+            if docker exec story-sleuth-backend wget -qO- http://127.0.0.1:5060/api/health > /dev/null 2>&1; then
+              echo "backend healthy after ${i} attempts"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "backend failed to become healthy"
+          cd /volume1/docker/story-sleuth
+          docker compose -f docker-compose.prod.yml logs --tail 50
+          exit 1
+
+      - name: Show running containers
+        run: |
+          cd /volume1/docker/story-sleuth
+          docker compose -f docker-compose.prod.yml ps
